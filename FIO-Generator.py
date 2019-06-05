@@ -30,6 +30,7 @@ def find_drives(display):
 
 def print_workloads(workload_list):
     available_targets = find_drives(False)
+    print ('Current workloads:')
     for workload_file in workload_list:
         iodepth = ''
         file = open(workload_file,'r')
@@ -52,11 +53,15 @@ def print_workloads(workload_list):
         if target not in available_targets:
             print ('*** Warning: This target drive is not detected on the system! ***')
         print ('-'*60)
+    if not workload_list:
+        print ('*** EMPTY! ***')
     print('')
     
 def delete_workloads(deletion_list):
+    print ('')
     print ('Files to be deleted:')
-    pprint (deletion_list)
+    for file in deletion_list:
+        print (file)
     if input("\n*** This will delete all previous jobs, Are you sure? ***") in ["Y","y"]:
         for file in deletion_list:
             if not debug:
@@ -64,17 +69,29 @@ def delete_workloads(deletion_list):
             print ('{0:<20}{1}'.format('Deleting file:',file))
         print('')
 
-        
+def import_workloads_from_file():
+    files = os.listdir()
+    workloads = []
+    for object in files:
+        if object.startswith('WL') and object.endswith('.fio'):
+            workloads.append(object)    
+    return workloads 
+
+def clear_screen_print_workloads():
+    if 'linux' in sys.platform:
+        os.system('reset')
+    else:
+        os.system('cls')
+    workloads = import_workloads_from_file()
+    print_workloads(workloads)
+    
 def main():
     ### Find files matching pattern WL*.fio in ./currentWL
     ### Store in workloads object
     ### Print previous workloads and details
     workloads = []
     os.chdir(path='./currentWL')
-    files = os.listdir()
-    for object in files:
-        if object.startswith('WL') and object.endswith('.fio'):
-            workloads.append(object)
+    workloads = import_workloads_from_file()
     print_workloads(workloads) 
     
     ### Ask user if they want to keep the existing current workloads
@@ -98,16 +115,49 @@ def main():
 
     ### List target drives available
     print ('')
+    print_workloads(workloads)   
     targets = find_drives(True)
-    while input("Do you want to add or delete a workload?") in ["Y","y"]:
-        workloads.append(fio_selector.create_fio(targets))
-        print("Current queued workloads:")
-        pprint(workloads)
-    for job in range(len(workloads)):
-        f = open('WL{:1d}.fio'.format(job),'w')
-        f.write('test')
-        f.close()
+    while input("Do you want to change a workload? (Y/N) ") in ["Y","y"]:
+        response = input ('Do you want to add or delete a workload? (A/D) ')
+        if response in ['a','A']:
+            # Add workload
+            newWL = fio_selector.create_fio(targets)
+            f = open('WL{:1d}.fio'.format(len(workloads)),'w')
+            f.write("""
+                    [global]
+                    name=fio-rand-RW
+                    filename={0}
+                    rw={1}
+                    rwmixread={2}
+                    bs={3}
+                    direct=1
+                    numjobs=4   
+                    time_based=1
+                    runtime=900
 
+                    [file1]
+
+                    ioengine=libaio
+                    iodepth={4})
+                    """.format(newWL.target,newWL.io_mix,newWL.io_type,newWL.io_size,newWL.QD)
+            f.close()
+        elif response in ['d','D']:
+            # Delete workload
+            while True:
+                try:
+                    deletion = input ('Which workload do you want to delete? (X to exit)')
+                    if deletion in ['x','X']:
+                        break
+                    else:
+                        deletion = int(deletion)
+                except ValueError:
+                    print ('Sorry, I did not understand the deletion number')
+                if not debug:
+                    os.delete(workloads[deletion])
+                print ('file deleted: {0}'.format(workloads[deletion]))
+        clear_screen_print_workloads()
+
+    sys.exit()
     ## Run FIO
     sys.exit()
 
