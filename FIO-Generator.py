@@ -11,13 +11,13 @@ def import_install(package):
         print ('Package not found: {0}, \n Importing package, please wait...'.format(package))
         subprocess.call([sys.executable,'-m','pip','install',package])
 
-#import_install('PyInquirer')
-#import fio_selector
+import_install('PyInquirer')
+import fio_selector
 
 def find_drives(display):
     if 'linux' in sys.platform:
         block_dev = subprocess.check_output('lsblk')
-        block_dev = [x for x in block_dev.splitlines() if x[0] in ['n','s']]
+        block_dev = [x.decode('utf-8') for x in block_dev.splitlines() if x.decode('utf-8')[0] in ['n','s','v']]
         block_dev = [x.split()[0] for x in block_dev]
     else: #windows/testmode
         block_dev = subprocess.check_output('wmic diskdrive get name,model')
@@ -84,7 +84,7 @@ def clear_screen_print_workloads():
         os.system('cls')
     workloads = import_workloads_from_file()
     print_workloads(workloads)
-    
+
 def main():
     ### Find files matching pattern WL*.fio in ./currentWL
     ### Store in workloads object
@@ -139,7 +139,7 @@ def main():
 
                     ioengine=libaio
                     iodepth={4})
-                    """.format(newWL.target,newWL.io_mix,newWL.io_type,newWL.io_size,newWL.QD)
+                    """.format(newWL.target,newWL.io_mix,newWL.io_type,newWL.io_size,newWL.QD))
             f.close()
         elif response in ['d','D']:
             # Delete workload
