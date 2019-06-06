@@ -1,7 +1,7 @@
 #!/usr/bin/python
 import subprocess,sys,os
 from pprint import pprint
-debug = 1
+debug = 0
 def import_install(package):
     try:
         __import__(package)
@@ -22,37 +22,45 @@ def find_drives(display):
     else: #windows/testmode
         block_dev = subprocess.check_output('wmic diskdrive get name,model')
         block_dev = [x.decode('utf-8') for x in block_dev.splitlines() if x]
-        block_dev = [x for x in block_dev if '\\' in x]
+        block_dev = [x.strip() for x in block_dev if '\\' in x]
     if display:
         print('Target Drives available:')
-        pprint(block_dev)
+        for drive in block_dev:
+            print(drive)
     return(block_dev)
 
 def print_workloads(workload_list):
     available_targets = find_drives(False)
     print ('Current workloads:')
+    dupCheck = []
     for workload_file in workload_list:
         iodepth = ''
         file = open(workload_file,'r')
-        test = file.readlines()
+        workloadFileLines = file.readlines()
         column_align = '{0:<30}{1}'
         print ('')
         print ('_____WORKLOAD_#{0:>30}'.format(str(workload_list.index(workload_file))+'_'*100)[0:60])
         print (column_align.format('Workload File found:',workload_file))
-        target = [x.split('=')[1].strip() for x in test if x.startswith('filename')][0]
+        target = [x.split('=')[1].strip() for x in workloadFileLines if x.startswith('filename')][0]
         print (column_align.format('Target:',target))
-        print (column_align.format('IO BlockSize:',[x.split('=')[1].strip() for x in test if x.startswith('bs')][0]))
-        print (column_align.format('Random/Sequential:',[x.split('=')[1].strip() for x in test if x.startswith('rw')][0]))
-        readPercent = int([x.split('=')[1].strip() for x in test if x.startswith('rwmixread')][0])
+        print (column_align.format('IO BlockSize:',[x.split('=')[1].strip() for x in workloadFileLines if x.startswith('bs')][0]))
+        print (column_align.format('Random/Sequential:',[x.split('=')[1].strip() for x in workloadFileLines if x.startswith('rw')][0]))
+        readPercent = int([x.split('=')[1].strip() for x in workloadFileLines if x.startswith('rwmixread')][0])
         print (column_align.format('R/W distribution:','{0}% Read, {1}% Write'.format(readPercent,(100-readPercent))))
-        numJobs = int([x.split('=')[1].strip() for x in test if x.startswith('numjobs')][0])
-        iodepth = int([x.split('=')[1].strip() for x in test if x.startswith('iodepth')][0])
+        numJobs = int([x.split('=')[1].strip() for x in workloadFileLines if x.startswith('numjobs')][0])
+        iodepth = int([x.split('=')[1].strip() for x in workloadFileLines if x.startswith('iodepth')][0])
         print (column_align.format('Queue Depth per job:','{0}'.format(iodepth)))
         print (column_align.format('Number of jobs:','{0}'.format(numJobs)))
         print (column_align.format('Total queue depth:','{0}'.format(numJobs*iodepth)))
-        if target not in available_targets:
+        if str(target) not in available_targets:
             print ('*** Warning: This target drive is not detected on the system! ***')
         print ('-'*60)
+        fileChk = fileChecksum(workload_file)
+        if fileChk in dupCheck:
+            print ('*** Warning: This is a duplicate workload!!! ***')
+            input('')
+        else : 
+            dupCheck.append(fileChecksum(workload_file))
     if not workload_list:
         print ('*** EMPTY! ***')
     print('')
@@ -65,7 +73,7 @@ def delete_workloads(deletion_list):
     if input("\n*** This will delete all previous jobs, Are you sure? ***") in ["Y","y"]:
         for file in deletion_list:
             if not debug:
-                os.delete(file)
+                os.remove(file)
             print ('{0:<20}{1}'.format('Deleting file:',file))
         print('')
 
@@ -84,6 +92,38 @@ def clear_screen_print_workloads():
         os.system('cls')
     workloads = import_workloads_from_file()
     print_workloads(workloads)
+
+def create_workload(targets,numWorkloads):
+    newWL = fio_selector.create_fio(targets)
+    f = open('WL.fio'.format(numWorkloads),'w')
+    f.write("""
+[global]
+name=fio-rand-RW
+filename={0}
+rw={1}
+rwmixread={2}
+bs={3}
+direct=1
+numjobs=4   
+time_based=1
+runtime=900
+
+[file1]
+ioengine=libaio
+iodepth={4}
+""".format(newWL['target'],('rw' if newWL['io_type']=='sequential' else 'randrw'),newWL['io_mix'].split('%')[0],newWL['io_size'],newWL['QD']))
+    f.close()
+    newName = fileChecksum('WL.fio')
+    try: 
+        os.rename('WL.fio','WL_{0}.fio'.format(newName))
+    except FileExistsError: 
+        print ('*** This is a duplicate workload! Workload file not created. ***')
+        os.remove('WL.fio')
+        input('Enter to continue')
+def fileChecksum(file):
+    import hashlib
+    md5check = hashlib.md5(open(file,'rb').read()).hexdigest()
+    return md5check
 
 def main():
     ### Find files matching pattern WL*.fio in ./currentWL
@@ -121,28 +161,10 @@ def main():
         response = input ('Do you want to add or delete a workload? (A/D) ')
         if response in ['a','A']:
             # Add workload
-            newWL = fio_selector.create_fio(targets)
-            f = open('WL{:1d}.fio'.format(len(workloads)),'w')
-            f.write("""
-                    [global]
-                    name=fio-rand-RW
-                    filename={0}
-                    rw={1}
-                    rwmixread={2}
-                    bs={3}
-                    direct=1
-                    numjobs=4   
-                    time_based=1
-                    runtime=900
-
-                    [file1]
-
-                    ioengine=libaio
-                    iodepth={4})
-                    """.format(newWL.target,newWL.io_mix,newWL.io_type,newWL.io_size,newWL.QD))
-            f.close()
+            create_workload(targets, len(workloads))
         elif response in ['d','D']:
             # Delete workload
+            workloads = import_workloads_from_file()
             while True:
                 try:
                     deletion = input ('Which workload do you want to delete? (X to exit)')
@@ -153,7 +175,7 @@ def main():
                 except ValueError:
                     print ('Sorry, I did not understand the deletion number')
                 if not debug:
-                    os.delete(workloads[deletion])
+                    os.remove(workloads[deletion])
                 print ('file deleted: {0}'.format(workloads[deletion]))
         clear_screen_print_workloads()
 
