@@ -127,7 +127,8 @@ def fileChecksum(file):
 
 def runFIOprocess(file):
     fioThread = subprocess.Popen('./fiorun.py -j {0}'.format(file),
-                                 stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,shell=1)
+                                 stdin=subprocess.PIPE,stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT,shell=1)
     
 
 
@@ -177,9 +178,9 @@ def main():
                 create_workload(targets, len(workloads))
             elif response in ['d','D']:
                 # Delete workload
-                workloads = import_workloads_from_file()
                 while True:
                     try:
+                        workloads = import_workloads_from_file()
                         deletion = input ('Which workload do you want to delete? (X to exit)')
                         if deletion in ['x','X']:
                             break
