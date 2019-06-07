@@ -77,7 +77,7 @@ def delete_workloads(deletion_list):
             print ('{0:<20}{1}'.format('Deleting file:',file))
         print('')
 
-def import_workloads_from_file():
+def importWLfromFile():
     files = os.listdir()
     workloads = []
     for object in files:
@@ -85,13 +85,12 @@ def import_workloads_from_file():
             workloads.append(object)    
     return workloads 
 
-def clear_screen_print_workloads():
+def clearScreen():
     if 'linux' in sys.platform:
         os.system('reset')
     else:
         os.system('cls')
-    workloads = import_workloads_from_file()
-    print_workloads(workloads)
+
 
 def create_workload(targets,numWorkloads):
     newWL = fio_selector.create_fio(targets)
@@ -143,7 +142,8 @@ def main():
     ### Print previous workloads and details
     workloads = []
     os.chdir(path='./currentWL')
-    workloads = import_workloads_from_file()
+    clearScreen()
+    workloads = importWLfromFile()
     print_workloads(workloads) 
     
     ### Ask user if they want to keep the existing current workloads
@@ -166,9 +166,12 @@ def main():
         delete_workloads(workloads)
 
     ### List target drives available
-    print ('')
+    clearScreen()
+    workloads=importWLfromFile()
     print_workloads(workloads)   
+    print ('')
     targets = find_drives(True)
+    # Change target workload dialog prompts
     while True:
         response = input("Do you want to change a workload? (Y/N) ")
         if response in ["Y","y"]:
@@ -180,7 +183,7 @@ def main():
                 # Delete workload
                 while True:
                     try:
-                        workloads = import_workloads_from_file()
+                        workloads = importWLfromFile()
                         deletion = input ('Which workload do you want to delete? (X to exit)')
                         if deletion in ['x','X']:
                             break
@@ -191,20 +194,29 @@ def main():
                     if not debug:
                         os.remove(workloads[deletion])
                     print ('file deleted: {0}'.format(workloads[deletion]))
-            clear_screen_print_workloads()
+            clearScreen()
+            workloads = importWLfromFile()
+            print_workloads(workloads)
         elif response in ['n','N']:
             break
         else:
             print ("Sorry, I could not understand that response.")
-            
-    sys.exit()
+    clearScreen()
+    workloads = importWLfromFile()
+    print_workloads(workloads)
+    
+    # Import WLs  from files and Run target workloads
     try:
         if input("Do you want to run these workloads? (Y/N) ") in ["Y","y"]:
+            for file in workloads:
+                print ('{0}{1}'.format('Starting Workload:',file))
+               #runFIOprocess(file)
             
         else:
             print ("Okay, exiting...")
-            sys.exit() 
-    sys.exit()
+            sys.exit()
+    except:
+        sys.exit()
 
 if __name__ == "__main__":
     main()  
