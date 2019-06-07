@@ -11,8 +11,8 @@ def import_install(package):
         print ('Package not found: {0}, \n Importing package, please wait...'.format(package))
         subprocess.call([sys.executable,'-m','pip','install',package])
 
-import_install('PyInquirer')
-import fio_selector
+#import_install('PyInquirer')
+#import fio_selector
 
 def find_drives(display):
     if 'linux' in sys.platform:
@@ -111,7 +111,7 @@ runtime=900
 [file1]
 ioengine=libaio
 iodepth={4}
-""".format(newWL['target'],('rw' if newWL['io_type']=='sequential' else 'randrw'),newWL['io_mix'].split('%')[0],newWL['io_size'],newWL['QD']))
+    """.format(newWL['target'],('rw' if newWL['io_type']=='sequential' else 'randrw'),newWL['io_mix'].split('%')[0],newWL['io_size'],newWL['QD']))
     f.close()
     newName = fileChecksum('WL.fio')
     try: 
@@ -124,6 +124,17 @@ def fileChecksum(file):
     import hashlib
     md5check = hashlib.md5(open(file,'rb').read()).hexdigest()
     return md5check
+
+def runFIOprocess(file):
+    fioThread = subprocess.Popen('./fiorun.py -j {0}'.format(file),
+                                 stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,shell=1)
+    
+
+
+
+
+
+
 
 def main():
     ### Find files matching pattern WL*.fio in ./currentWL
@@ -157,30 +168,41 @@ def main():
     print ('')
     print_workloads(workloads)   
     targets = find_drives(True)
-    while input("Do you want to change a workload? (Y/N) ") in ["Y","y"]:
-        response = input ('Do you want to add or delete a workload? (A/D) ')
-        if response in ['a','A']:
-            # Add workload
-            create_workload(targets, len(workloads))
-        elif response in ['d','D']:
-            # Delete workload
-            workloads = import_workloads_from_file()
-            while True:
-                try:
-                    deletion = input ('Which workload do you want to delete? (X to exit)')
-                    if deletion in ['x','X']:
-                        break
-                    else:
-                        deletion = int(deletion)
-                except ValueError:
-                    print ('Sorry, I did not understand the deletion number')
-                if not debug:
-                    os.remove(workloads[deletion])
-                print ('file deleted: {0}'.format(workloads[deletion]))
-        clear_screen_print_workloads()
-
+    while True:
+        response = input("Do you want to change a workload? (Y/N) ")
+        if response in ["Y","y"]:
+            response = input ('Do you want to add or delete a workload? (A/D) ')
+            if response in ['a','A']:
+                # Add workload
+                create_workload(targets, len(workloads))
+            elif response in ['d','D']:
+                # Delete workload
+                workloads = import_workloads_from_file()
+                while True:
+                    try:
+                        deletion = input ('Which workload do you want to delete? (X to exit)')
+                        if deletion in ['x','X']:
+                            break
+                        else:
+                            deletion = int(deletion)
+                    except ValueError:
+                        print ('Sorry, I did not understand the deletion number')
+                    if not debug:
+                        os.remove(workloads[deletion])
+                    print ('file deleted: {0}'.format(workloads[deletion]))
+            clear_screen_print_workloads()
+        elif response in ['n','N']:
+            break
+        else:
+            print ("Sorry, I could not understand that response.")
+            
     sys.exit()
-    ## Run FIO
+    try:
+        if input("Do you want to run these workloads? (Y/N) ") in ["Y","y"]:
+            
+        else:
+            print ("Okay, exiting...")
+            sys.exit() 
     sys.exit()
 
 if __name__ == "__main__":
