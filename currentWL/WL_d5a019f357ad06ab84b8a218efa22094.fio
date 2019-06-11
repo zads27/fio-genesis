@@ -1,0 +1,16 @@
+
+[global]
+name=fio-rand-RW
+filename=vda
+rw=rw
+rwmixread=30
+bs=16k
+direct=1
+numjobs=4   
+time_based=1
+runtime=10
+size=100M
+[file1]
+ioengine=libaio
+iodepth=4
+    
