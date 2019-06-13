@@ -1,10 +1,8 @@
 #!/usr/bin/python
-import subprocess,sys,os,re,copy
+import subprocess,sys,os,re,copy,hashlib
 from tabulate import tabulate
 from pprint import pprint
 debug = 0
-tqdmDisplay = 0
-if tqdmDisplay: import tqdm
 def import_install(package):
     try:
         __import__(package)
@@ -19,6 +17,15 @@ import fio_selector
 
 
 def find_drives(display):
+    """
+    Function to scan drives/block devices on system
+    
+    Parameters: 
+        display (bool): If True, will print drive list to stdout
+        
+    Returns: 
+        block_dev (list): a list of handles containing the system drive handle 
+    """
     if 'linux' in sys.platform:
         block_dev = subprocess.check_output('lsblk')
         block_dev = [x.decode('utf-8') for x in block_dev.splitlines() if x.decode('utf-8')[0] in ['n','s','v']]
@@ -35,16 +42,44 @@ def find_drives(display):
 
     
 def createWorkloadTable(workloadData,showindex):
-    headers = ['Filename','Trgt','BS','Rnd/Seq','R/W %','Jobs','QD','Size','Time','Status']          
+    """
+    Function to create a tabulate library table to display workloads detected and queued for running
+    
+    Parameters:
+        workloadData (list): a list of lists containing 1 workload file per element 
+            and describing all parameters parsed from workload file
+        showindex (bool): if true, will add the index to the output table;
+            typically on for display/add/delete workloads, off for workload runtime monitoring (to save some screen display space)
+            
+    Returns:
+        tabulate: a string with appropriate table formatting; exceeding terminal width will scramble the display formatting  
+    """
+    if showindex == 1:
+        headers = ['Filename','Trgt','BS','Rnd/Seq','R/W %','Jobs','QD','Size','Time','Status']          
+    else:
+        headers = ['Filename','Trgt','BS','Rnd/Seq','R/W %','ETA','Status','Perf\n[IOPS]']              
     shortenedFilenameData = copy.deepcopy(workloadData)
     for fileN in shortenedFilenameData:
         fileN[0] = fileN[0][0:7]+'..'+fileN[0][-8:]
+        if showindex == 0: 
+            fileN.pop(5)
+            fileN.pop(5)
+            fileN.pop(5)
     return tabulate(shortenedFilenameData, headers=headers, showindex=showindex, tablefmt='fancy_grid')
 
     
 def importExtractWorkloadData():
     """
+    Find fio files from pre-set pattern WL*.fio and parse the critical command line parameters
+        Additionally, check for duplicate file content(via md5), or incomplete workload files 
     
+    Parameters: 
+        None
+        
+    Returns: 
+        workloadData (list): list of lists containing one workload file per entry;
+            [   [filename1, bs1, rw1, rwmixread1, numjobs1, iodepth1, size1, runtime1],
+                [filename2, bs2, ...]   ]
     """
     files = os.listdir()
     workloadFiles = []
@@ -53,7 +88,7 @@ def importExtractWorkloadData():
             workloadFiles.append(filename)     
     available_targets = find_drives(False)
     print ('Current workloads:')
-    dupCheck = []
+    dupCheck = {}
     workloadData = []
     for workload_file in workloadFiles:
         try:
@@ -71,12 +106,11 @@ def importExtractWorkloadData():
             if str(target) not in available_targets:
                 print ('*** Warning: Target drive: {0} is not detected on the system! ***'.format(target))
             fileChk = fileChecksum(workload_file)
-            if fileChk in dupCheck:
-                print ('*** Warning: This is a duplicate workload!!! ***')
-                input('')
+            if fileChk in dupCheck: 
+                print ('*** Warning: These are duplicate workloads!!! ***\n  \u250F\u2501\u26A0 {0}\n  \u2517\u2501\u26A0 {1}'.format(workload_file,dupCheck[fileChecksum(workload_file)]))
             else : 
-                dupCheck.append(fileChecksum(workload_file))
-                workloadData.append([workload_file,target,bs,rw,readPercent,numJobs,iodepth,size,time,'Idle'])
+                dupCheck[fileChecksum(workload_file)] = workload_file
+            workloadData.append([workload_file,target,bs,rw,readPercent,numJobs,iodepth,size,time,'Idle'])
         except (IndexError,ValueError):
             print ('\n*** ERROR: Incomplete/Missing data from WL file: {0} ***'.format(workload_file))
             print ('This file must be deleted or the program will exit.')
@@ -90,6 +124,7 @@ def importExtractWorkloadData():
     
     
 def delete_workloads(deletion_list):
+    """Delete files from input (list) parameter"""
     print ('')
     print ('Files to be deleted:')
     for file in deletion_list:
@@ -103,47 +138,62 @@ def delete_workloads(deletion_list):
 
 
 def clearScreen():
+    """Perform screen/terminal clear"""
     if 'linux' in sys.platform:
-        os.system('reset')
+        os.system('clear')
     else:
         os.system('cls')
 
 
 def create_workload(targets):
-    newWL = fio_selector.create_fio(targets)
-    f = open('WL_temp.fio','w')
-    f.write('[WL]\n' 
-            'name=fio-rand-RW\n'
-            'filename={target}\n'
-            'rw={rw}\n'
-            'rwmixread={iomix}\n'
-            'bs={bs}\n'
-            'direct=1\n'
-            'size={size}\n'
-            'ioengine=libaio\n'
-            'iodepth={iodepth}\n'
-            '{time}\n'
-            'numjobs={jobs}\n'.format(
-                target = newWL['target'],
-                rw = ('rw' if newWL['io_type']=='sequential' else 'randrw'),
-                iomix = newWL['io_mix'].split('%')[0],
-                bs = newWL['io_size'],
-                size = newWL['size'],
-                iodepth = newWL['QD'],
-                time = ('time_based=1 \nruntime={0}'.format(newWL['time']) if newWL['time'] else ''),
-                jobs = newWL['jobs'] ))
-    f.close()
-    newName = fileChecksum('WL_temp.fio')
+    """
+    Create WL*.fio file from fio_selector.py selector module
+    
+    Parameters: 
+        targets (list): a list of target drives that will be passed to fio_selector
+    
+    Output:
+        WL_[md5sum].fio file: a fio workload file containining selected parameters passed back from fio_selector.py     
+    """
     try: 
-        os.rename('WL_temp.fio','WL_{0}.fio'.format(newName))
-    except FileExistsError: 
-        print ('*** This is a duplicate workload! Workload file not created. ***')
-        os.remove('WL.fio')
-        input('Enter to continue')
-   
+        newWL = fio_selector.create_fio(targets)
+        f = open('WL_temp.fio','w')
+        f.write('[WL]\n' 
+                'group_reporting=1\n'
+                'name=fio-rand-RW\n'
+                'filename={target}\n'
+                'rw={rw}\n'
+                'rwmixread={iomix}\n'
+                'bs={bs}\n'
+                'direct=1\n'
+                'size={size}\n'
+                'ioengine=libaio\n'
+                'iodepth={iodepth}\n'
+                '{time}\n'
+                'numjobs={jobs}\n'.format(
+                    target = newWL['target'],
+                    rw = ('rw' if newWL['io_type']=='sequential' else 'randrw'),
+                    iomix = newWL['io_mix'].split('%')[0],
+                    bs = newWL['io_size'],
+                    size = newWL['size'],
+                    iodepth = newWL['QD'],
+                    time = ('time_based=1 \nruntime={0}'.format(newWL['time']) if newWL['time'] else ''),
+                    jobs = newWL['jobs'] ))
+        f.close()
+        newName = fileChecksum('WL_temp.fio')
+        try: 
+            os.rename('WL_temp.fio','WL_{0}.fio'.format(newName))
+        except FileExistsError: 
+            print ('*** This is a duplicate workload! Workload file not created. ***')
+            os.remove('WL.fio')
+            input('Enter to continue')
+    except:
+        print ('Error in file workload completion')
+        os.remove('WL_temp.fio')   
+        
         
 def fileChecksum(file):
-    import hashlib
+    """Return checksum of file specified by input [file]"""
     md5check = hashlib.md5(open(file,'rb').read()).hexdigest()
     return md5check
 
@@ -153,7 +203,10 @@ def runFIOprocess(file):
         fioThread = subprocess.Popen(
             ['fio',
             file,
-            '--eta=always'],
+            '--eta=always',
+            '--output={}'.format(file.split('.')[0]+'.log'),
+            '--output-format=json'
+            ],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             universal_newlines=True,
@@ -197,7 +250,6 @@ def get_value(line, value='iops'):
         pattern = r'\[r=([^,]+),w=([^\]]+)\]'
     m = re.search(pattern, line)
     if m:
-        # print 'get_value: groups', m.group(1), m.group(2)
         r, w = to_number(m.group(1)), to_number(m.group(2))
         result['performance'] = '{0:2f}'.format(r + w)
     pattern = r'\[([0-9]+[.0-9]+)%.*\[eta\s+([0-9hms:]+)'
@@ -208,7 +260,7 @@ def get_value(line, value='iops'):
     
     
 def progBar(percentage):
-    barLength = 20
+    barLength = 10
     progress = '\u2588'*int(percentage*barLength/100)
     segmentSpan = 100/barLength
     segmentResidual = percentage % barLength
@@ -298,12 +350,7 @@ def main():
                 processTracker[file]={'process':runFIOprocess(file)}
             progressBars = {}
             performanceBars = {}
-            if tqdmDisplay == 1:
-                for workload in processTracker:
-                    progressBars[workload] = tqdm.tqdm(desc='{0}'.format(workload),unit='%',total=100)
-                    #performanceBars[workload] = tqdm.tqdm(desc='{0} IOPS:'.format(workload),unit='',total=100000)
-            else:
-                print('\n'*(2*len(workloadData)+2))    
+            print('\n'*(2*len(workloadData)+2))    
             while processTracker:
                 removal = []
                 for workload in processTracker:
@@ -312,22 +359,22 @@ def main():
                         sys.stdout.write(line)
                     if line[0:4] == 'Jobs':
                         processTracker[workload].update(get_value(line))
-                        if tqdmDisplay == 1:
-                            progressBars[workload].n = float(processTracker[workload]['percentComplete'])
-                            progressBars[workload].display()
-                            #performanceBars[workload].n = float(processTracker[workload]['performance'])
-                            #performanceBars[workload].display() 
-                        else:
-                            for row in workloadData: 
-                                if row[0] == workload:
-                                    percent = float(processTracker[workload]['percentComplete'])
-                                    row[-1] = progBar(percent)+' {0:3}%'.format(int(percent)) 
-                                    print('\x1b[A'*(2*len(workloadData)+4)+'\r')
-                                    print(createWorkloadTable(workloadData,0))
+                        for row in workloadData: 
+                            if row[0] == workload:
+                                percent = float(processTracker[workload]['percentComplete'])
+                                row[9] = progBar(percent)+' {0:3}%'.format(int(percent)) 
+                                row[8] = (processTracker[workload]['eta'])
+                                perf = float(processTracker[workload]['performance'])
+                                if 1 and perf > 1000:
+                                    perf = '{:.1f}k'.format(perf/1000)
+                                if len(row) == 10:
+                                    row.append(str(perf))
+                                else: 
+                                    row[10] = str(perf)
+                                print('\x1b[A'*(2*len(workloadData)+5)+'\r')
+                                print(createWorkloadTable(workloadData,0))
                     if line == '' and processTracker[workload]['process'].poll() is not None: 
                         removal.append(workload)
-                        if tqdmDisplay == 1:
-                            progressBars[workload].close()
                 for x in removal:
                     processTracker.pop(x)
     except KeyError as key: 
