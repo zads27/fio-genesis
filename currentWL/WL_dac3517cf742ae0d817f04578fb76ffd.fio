@@ -1,15 +1,16 @@
 
 [global]
 name=fio-rand-RW
-filename=HFS120G32MED-3410A  \\.\PHYSICALDRIVE1
+filename=/vdb
 rw=randrw
-rwmixread=100
+rwmixread=30
 bs=8k
 direct=1
 numjobs=4   
 time_based=1
-runtime=900
-
+runtime=8
+size=10M
 [file1]
 ioengine=libaio
-iodepth=1
+iodepth=16
+    

@@ -1,0 +1,14 @@
+[global]
+name=fio-rand-RW
+filename=/vdb
+rw=randrw
+rwmixread=100
+bs=4k
+direct=1
+numjobs=4
+size=20M
+ioengine=libaio
+iodepth=2
+time_based=1 
+runtime=10s
+[file1]

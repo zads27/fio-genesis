@@ -15,12 +15,8 @@ style = style_from_dict({
     Token.Question: '',
 })
 
-def get_drives():
-    sample = ['/dev/nvme0n1','/dev/nvme1n1','/dev/nvme2n1']
-    return sample
-
 def create_fio(target):
-    target_question = [
+    questions = [
         {
             'type': 'list',
             'message': 'Select target drive',
@@ -28,32 +24,35 @@ def create_fio(target):
             'choices': target,
             'validate': lambda answer: 'You must choose one drive.' \
                 if len(answer) == 0 else True
-        }
-    ]
-
-    io_size_question = [
+        },
+    
         {
             'type': 'list',
             'message': 'Select target IO transaction size',
             'name': 'io_size',
-            'choices': ['4k','8k','16k','128k'],
+            'choices': ['4k','8k','16k','32k','64k','128k','Other'],
             'validate': lambda answer: 'You must choose one value.' \
                 if len(answer) == 0 else True
-        }
-    ]
-
-    io_type_question = [
+        },
+    
+        {
+            'type': 'input',
+            'message': '\u2517\u2501 Enter target IO transaction size',
+            'name': 'io_size',
+            'validate': lambda answer: 'You must enter a value.' \
+                if len(answer) == 0 else True,
+            'when': lambda answers: answers['io_size'] == 'Other'
+        }, 
+    
         {
             'type': 'list',
-            'message': 'Select target IO transaction size',
+            'message': 'Select target IO transaction random/sequential',
             'name': 'io_type',
             'choices': ['random','sequential'],
             'validate': lambda answer: 'You must choose one value.' \
                 if len(answer) == 0 else True
-        }
-    ]
-
-    io_mix_question = [
+        },
+    
         {
             'type': 'list',
             'message': 'Select target IO R/W mix',
@@ -61,23 +60,81 @@ def create_fio(target):
             'choices': ['100% read','70% read','30% read','0% read'],
             'validate': lambda answer: 'You must choose one value.' \
                 if len(answer) == 0 else True
-        }
-    ]
+        },        
 
-    qd_question = [
+        {
+            'type': 'list',
+            'message': 'Select number of Jobs',
+            'name': 'jobs',
+            'choices': ['1','2','4','8','16','32','Other'],
+            'validate': lambda answer: 'You must choose one value.' \
+                if len(answer) == 0 else True
+        },
+    
+        {
+            'type': 'input',
+            'message': '\u2517\u2501 Enter number of jobs',
+            'name': 'jobs',
+            'validate': lambda answer: 'You must enter a value.' \
+                if len(answer) == 0 else True,
+            'when': lambda answers: answers['jobs'] == 'Other'
+        },         
+
         {
             'type': 'list',
             'message': 'Select target IO Queue Depth',
             'name': 'QD',
-            'choices': ['1','2','4','8','16','32','64','128','256'],
+            'choices': ['1','2','4','8','16','32','64','128','256','Other'],
             'validate': lambda answer: 'You must choose one value.' \
                 if len(answer) == 0 else True
-        }
+        },
+
+        {
+            'type': 'input',
+            'message': 'Select target IO Queue Depth',
+            'name': 'QD',
+            'validate': lambda answer: 'You must choose one value.' \
+                if len(answer) == 0 else True,
+            'when': lambda answers: answers['QD'] == 'Other'
+        },
+           
+        {
+            'type': 'list',
+            'message': 'Select target IO file size',
+            'name': 'size',
+            'choices': ['100%','50%','10%','100M','500M','1G','2G','10G','20G','Other'],
+            'validate': lambda answer: 'You must choose one value.' \
+                if len(answer) == 0 else True
+        }, 
+    
+        {
+            'type': 'input',
+            'message': '\u2517\u2501 Enter target IO file size',
+            'name': 'size',
+            'validate': lambda answer: 'You must enter a value.' \
+                if len(answer) == 0 else True,
+            'when': lambda answers: answers['size'] == 'Other'
+        },    
+    
+        {
+            'type': 'list',
+            'message': 'Select workload time',
+            'name': 'time',
+            'choices': ['10s','1m','1h','10h','2d','7d','10d','None','Other'    ],
+            'validate': lambda answer: 'You must choose one value.' \
+                if len(answer) == 0 else True
+        },     
+
+        {
+            'type': 'input',
+            'message': '\u2517\u2501 Enter target workload time:',
+            'name': 'time',
+            'validate': lambda answer: 'You must enter a value.' \
+                if len(answer) == 0 else True,
+            'when': lambda answers: answers['time'] == 'Other'
+        },
+
     ]
-    answers = prompt(target_question, style=style)
-    answers.update(prompt(io_size_question, style=style))
-    answers.update(prompt(io_type_question, style=style))
-    answers.update(prompt(io_mix_question, style=style))
-    answers.update(prompt(qd_question, style=style))
+    answers = prompt(questions, style=style)
     return (answers)
 
