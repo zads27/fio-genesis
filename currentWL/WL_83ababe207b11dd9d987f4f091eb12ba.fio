@@ -9,5 +9,5 @@ size=100M
 ioengine=libaio
 iodepth=16
 time_based=1 
-runtime=10s
+runtime=6s
 numjobs=2

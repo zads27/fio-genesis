@@ -13,7 +13,7 @@ def import_install(package):
         subprocess.call([sys.executable,'-m','pip','install',package])
 
 import_install('PyInquirer')
-import fio_selector
+import fioSelector
 
 
 def find_drives(display):
@@ -147,16 +147,16 @@ def clearScreen():
 
 def create_workload(targets):
     """
-    Create WL*.fio file from fio_selector.py selector module
+    Create WL*.fio file from fioSelector.py selector module
     
     Parameters: 
-        targets (list): a list of target drives that will be passed to fio_selector
+        targets (list): a list of target drives that will be passed to fioSelector
     
     Output:
-        WL_[md5sum].fio file: a fio workload file containining selected parameters passed back from fio_selector.py     
+        WL_[md5sum].fio file: a fio workload file containining selected parameters passed back from fioSelector.py     
     """
     try: 
-        newWL = fio_selector.create_fio(targets)
+        newWL = fioSelector.create_fio(targets)
         f = open('WL_temp.fio','w')
         f.write('[WL]\n' 
                 'group_reporting=1\n'
@@ -198,7 +198,19 @@ def fileChecksum(file):
     return md5check
 
 
-def runFIOprocess(file):                          
+def runFIOprocess(file):                  
+    """
+    Runs fio executable with JSON fio output for WL*.fio to WL*.log 
+    
+    Parameters: 
+        file (string): target .fio workload file to run
+        
+    Returns:
+        object handle pointing to subprocess.Popen that is running
+        
+    Note:
+        stdout/stderr are routed to Popen object PIPE   
+    """        
     try: 
         fioThread = subprocess.Popen(
             ['fio',
@@ -260,17 +272,26 @@ def get_value(line, value='iops'):
     
     
 def progBar(percentage):
-    barLength = 10
+    """
+    Create 'shaded' progress bar string of variable length
+    
+    Parameters:
+        percentage (float or int): percentage completion of task/progress
+    
+    Returns: 
+        String of length 'barLength' (hardcoded) shaded according to progress percentage
+    """
+    barLength = 30
     progress = '\u2588'*int(percentage*barLength/100)
     segmentSpan = 100/barLength
-    segmentResidual = percentage % barLength
-    if segmentResidual:
-        if segmentResidual < (segmentSpan/3):
-            progress += '\u2591'
-        elif segmentResidual < (2*segmentSpan/3):
-            progress += '\u2592'
-        else:
-            progress += '\u2593'
+    segmentRemainder = percentage % barLength
+    if segmentRemainder:
+        if segmentRemainder < (segmentSpan/3):
+            progress += '\u2591' #light shade
+        elif segmentRemainder < (2*segmentSpan/3):
+            progress += '\u2592' #medium shade
+        elif percentage < 100:
+            progress += '\u2593' #dark shade
     progress += '-'*(barLength-len(progress))
     return progress
  
@@ -371,8 +392,8 @@ def main():
                                     row.append(str(perf))
                                 else: 
                                     row[10] = str(perf)
-                                print('\x1b[A'*(2*len(workloadData)+5)+'\r')
-                                print(createWorkloadTable(workloadData,0))
+                                print('\x1b[A'*(2*len(workloadData)+5)+'\r') #move caret back to beginning of table
+                                print(createWorkloadTable(workloadData,0)) #reprint workload monitor table
                     if line == '' and processTracker[workload]['process'].poll() is not None: 
                         removal.append(workload)
                 for x in removal:
@@ -385,7 +406,7 @@ def main():
         sys.exit()
    
     sys.stdout.flush()
-    print('FIO run Complete')
+    print('FIO-Generator Complete')
 
 if __name__ == "__main__":
     main()  
