@@ -158,7 +158,7 @@ function (chart) {{
 </script>
 """.format(resultFile=resultFile,workloadTitle=workloadTitle,ID=containerID)
 
-def createHTMLpage(displayWL):
+def createHTMLpage(displayWL, title='SK hynix SSD benchmark demo workloads'):
     """
     Automatically generate JS-based webpage for displaying benchmarking live results from fio running workloads
     
@@ -195,7 +195,7 @@ def createHTMLpage(displayWL):
         displayWL = displayWLsample
     HTMLpage = ''
     workloadsContainerHTML = generateContainers(displayWL)
-    HTMLpage = htmlMain('SK hynix SSD benchmark demo workloads',workloadsContainerHTML)    
+    HTMLpage = htmlMain('{0}'.format(title),workloadsContainerHTML)    
     
     for displayItem in displayWL:
        HTMLpage += generateGraph(displayItem['filename'],displayItem['wlDescription'],displayWL.index(displayItem))

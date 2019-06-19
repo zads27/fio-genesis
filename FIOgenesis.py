@@ -1,8 +1,8 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 import subprocess,sys,os,re,copy,hashlib
 from tabulate import tabulate
 from pprint import pprint
-debug = 0
+debug = 1
 def import_install(package):
     try:
         __import__(package)
@@ -363,7 +363,8 @@ def main():
     # Import WLs  from files and Run target workloads, display progress bars 
     try:
         if input("Do you want to run these workloads? (Y/N) ") in ["Y","y"]:
-            # processTracker = {filename:{process: processHandle, percentage:0,performance:0,eta:0}}
+            # processTracker = {filename:{process: processHandle, percentage:0,performance:0,eta:0},
+            #                    filename2:{process2: processHandle2, percentage:0,performance:0,eta:0}}
             processTracker = {}
             workloadFiles = [x[0] for x in workloadData]
             for file in workloadFiles:
@@ -376,8 +377,6 @@ def main():
                 removal = []
                 for workload in processTracker:
                     line = processTracker[workload]['process'].stdout.readline()              
-                    if debug:
-                        sys.stdout.write(line)
                     if line[0:4] == 'Jobs':
                         processTracker[workload].update(get_value(line))
                         for row in workloadData: 
@@ -386,6 +385,11 @@ def main():
                                 row[9] = progBar(percent)+' {0:3}%'.format(int(percent)) 
                                 row[8] = (processTracker[workload]['eta'])
                                 perf = float(processTracker[workload]['performance'])
+                                if debug:
+                                    #os.chdir('../')
+                                    f = open('{0}'.format(workload.split('.')[0])+'.dat','w')
+                                    f.write(str(int(float('{:.{p}g}'.format(int(perf),p=3))))) #3 significant figures
+                                    f.close()
                                 if 1 and perf > 1000:
                                     perf = '{:.1f}k'.format(perf/1000)
                                 if len(row) == 10:
