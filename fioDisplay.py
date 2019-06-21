@@ -10,7 +10,23 @@ def htmlMain(title,workloads):
 <script type="text/javascript" src="js/highcharts.js"></script>
 <script type="text/javascript" src="js/highcharts-more.js"></script>
 <script type="text/javascript" src="js/solid-gauge.js"></script>
-
+<script>
+function startTime() {{
+    var today = new Date();
+    var h = today.getHours();
+    var m = today.getMinutes();
+    var s = today.getSeconds();
+    m = checkTime(m);
+    s = checkTime(s);
+    document.getElementById('clock').innerHTML =
+    h + ":" + m + ":" + s;
+    var t = setTimeout(startTime, 500);
+}}
+function checkTime(i) {{
+    if (i < 10) {{i = "0" + i}};  // add zero in front of numbers < 10
+    return i;
+}}
+</script>
 </head>
 <body onload="startTime()">
 <br/>
@@ -163,7 +179,8 @@ def createHTMLpage(displayWL, title='SK hynix SSD benchmark demo workloads'):
     Automatically generate JS-based webpage for displaying benchmarking live results from fio running workloads
     
     Arguments: 
-        displayWL (list of dict): Each dict entry in list is one workload/display graph
+        displayWL (list of dict): Each dict entry in list is one workload/display graph containing elements:
+            keys: {filename, targetDescription, wlDescription, datatype}
         
     Output:
         fioDisplay.html 
@@ -198,7 +215,7 @@ def createHTMLpage(displayWL, title='SK hynix SSD benchmark demo workloads'):
     HTMLpage = htmlMain('{0}'.format(title),workloadsContainerHTML)    
     
     for displayItem in displayWL:
-       HTMLpage += generateGraph(displayItem['filename'],displayItem['wlDescription'],displayWL.index(displayItem))
+       HTMLpage += generateGraph(displayItem['outputTrackingFile'],displayItem['wlDescription'],displayWL.index(displayItem))
     
     f = open('fioDisplay.html','w')
     f.write(HTMLpage)
