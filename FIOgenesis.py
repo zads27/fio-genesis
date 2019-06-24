@@ -370,7 +370,7 @@ def plotOutput():
     
     py.plot(fig, filename='results/results.html',auto_open=False)
     webbrowser.open('results/results.html', new=0)
-    
+
 def main():
     """
     Find files matching pattern WL*.fio in ./currentWL
@@ -493,7 +493,6 @@ def main():
         sys.exit()
     """   
     sys.stdout.flush()
-
     if 0:
         #Delete live output files
         try: 
