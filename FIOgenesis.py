@@ -1,6 +1,7 @@
 #!/usr/bin/python3
-import subprocess,sys,os,re,copy,hashlib
+import subprocess,sys,os,re,copy,hashlib,datetime,shutil
 from tabulate import tabulate
+import plotly
 from pprint import pprint
 debug = 0
 def import_install(package):
@@ -59,7 +60,7 @@ def createWorkloadTable(workloadData,showindex):
         #            'readPercent':'R/W %','numJobs':'Jobs','iodepth':'QD','size':'Size','time':'Time','status':'Status'}          
         headers = ['Filename','Trgt','BS','Rnd/Seq','R/W %','Jobs','QD','Size','Time','Status']          
     else:
-        headers = ['Filename','Trgt','BS','Rnd/Seq','R/W %','ETA','Status','Perf\n[IOPS]']              
+        headers = ['Filename','Trgt','BS','Rnd/Seq','R/W %','ETA','Status','Perf\n[IOPS]','Perf\n[MBps]']              
     for fileN in workloadData:
         fileN['shortname'] = fileN['filename'][0:7]+'..'+fileN['filename'][-8:]
     shortenedFilenameData = []
@@ -69,7 +70,7 @@ def createWorkloadTable(workloadData,showindex):
                                         wl['numJobs'],wl['iodepth'],wl['size'],wl['time'],wl['status']])
         else:
             shortenedFilenameData.append([wl['shortname'],wl['target'],wl['bs'],wl['rw'],wl['readPercent'],
-                                        wl['eta'],wl['status'],wl['performance']])
+                                        wl['eta'],wl['status'],wl['iops'],wl['mbps']])
     return tabulate(shortenedFilenameData, headers=headers, showindex=showindex, tablefmt='fancy_grid')
 
     
@@ -126,8 +127,9 @@ def importExtractWorkloadData():
                                     'size':size,
                                     'time':time,
                                     'status':'Idle',
-                                    'eta':'Unknown',
-                                    'performance':'0',
+                                    'eta':'N/A',
+                                    'iops':'0',
+                                    'mbps':'0',
                                     'percentComplete':0})
         except (IndexError,ValueError):
             print ('\n*** ERROR: Incomplete/Missing data from WL file: {0} ***'.format(workload_file))
@@ -223,7 +225,7 @@ def fileChecksum(file):
     return md5check
 
 
-def runFIOprocess(file):                  
+def runFIOprocess(workload):                  
     """
     Runs fio executable with JSON fio output for WL*.fio to WL*.log 
     
@@ -239,16 +241,22 @@ def runFIOprocess(file):
     try: 
         fioThread = subprocess.Popen(
             ['fio',
-            file,
+            workload['filename'],
             '--eta=always',
-            '--output={}'.format(file.split('.')[0]+'.log'),
+            '--output=results/{}'.format(workload['filename'].split('.')[0]+'.log'),
             '--output-format=json'
             ],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             universal_newlines=True,
             shell=False)
-        return (fioThread)    
+        workload['process'] = fioThread
+        workload['filename'].split('.')[0]+'.dat'
+        workload['wlDescription'] = ' '.join([workload['bs'],workload['rw']])
+        workload['targetDescription'] = 'SK hynix drive'
+        workload['dataType'] = 'IOPS'
+        workload['outputTrackingFileH'] = open('results/{0}.dat'.format(workload['filename'].split('.')[0]),'w')
+        workload['outputTrackingFileH'].write('timestamp,iops,mbps\n')        
     except Exception as e:
         print('runFIOprocess error: {0}'.format(e))
 
@@ -274,25 +282,30 @@ def to_number(mstring):
         raise ValueError('unknown units %s' % mstring)   
 
    
-def get_value(line, value='iops'):
+def get_value(line):
     """Parse continuous fio output and get requested value"""
     # jobs: 1 (f=1): [R(1)][1.2%][r=1733MiB/s,w=0KiB/s][r=13.9k,w=0 IOPS][eta 59m:17s]
     result = {'percentComplete':'0',
-                'performance':'0.00',
-                'eta':'0'}
-    # result: percentage complete; performance (IOPS OR Throughput); eta (time)
-    if value == 'iops':
-        pattern = r'\[r=([^,]+),w=([^\]]+)\s+(?i)IOPS\]'
-    else:
-        pattern = r'\[r=([^,]+),w=([^\]]+)\]'
+                'iops':'0',
+                'mbps':'0',
+                'eta':'Unknown'}
+    
+    pattern = r'\[r=([^,]+),w=([^\]]+)\s+(?i)IOPS\]'
     m = re.search(pattern, line)
     if m:
         r, w = to_number(m.group(1)), to_number(m.group(2))
-        result['performance'] = '{0:2f}'.format(r + w)
+        result['iops'] = '{0:2f}'.format(r + w)
+    
     pattern = r'\[([0-9]+[.0-9]+)%.*\[eta\s+([0-9hms:]+)'
     m = re.search(pattern, line)
     if m:
         result['percentComplete'], result['eta'] = m.group(1), m.group(2)
+    
+    pattern = r'\[r=([^,]+),w=([^\]]+)\]'
+    m = re.search(pattern, line)
+    if m:
+        r, w = to_number(m.group(1)), to_number(m.group(2))
+        result['mbps'] = '{0:.1f}'.format(r + w)
     return result  
     
     
@@ -320,7 +333,44 @@ def progBar(percentage):
     progress += '-'*(barLength-len(progress))
     return progress
  
- 
+def plotOutput():
+    import glob
+    from plotly import tools
+    import plotly.offline as py
+    import plotly.graph_objs as go
+    import pandas as pd
+    import webbrowser
+    iopsdata,mbpsdata = [],[]
+    
+    for filename in glob.glob('results/*.dat'):
+        df = pd.read_csv(filename)
+        filename = filename[8:-4]
+        shortname = (filename[:5]+'...'+filename[-5:]) if len(filename) > 10 else filename
+        iopsTrace = go.Scatter( 
+                        x=df['timestamp'], y=df['iops'], # Data
+                        mode='lines', name=shortname+' IOps' # Additional options
+                       )
+        mbpsTrace = go.Scatter(
+                        x=df['timestamp'], y=df['mbps'], # Data
+                        mode='lines', name=shortname+' MBps' # Additional options
+                       )
+        iopsdata.append(iopsTrace)
+        mbpsdata.append(mbpsTrace)
+    layout = go.Layout(title='Workload Performance chart output',
+                       paper_bgcolor='rgb(230, 230, 230)',
+                       plot_bgcolor='rgb(200 , 200 , 200)')    
+    fig = tools.make_subplots(rows=2,cols=1,shared_xaxes=True,vertical_spacing=0.02,print_grid=False)
+    fig['layout']['yaxis1'].update(title='IOPS')
+    fig['layout']['yaxis2'].update(title='MBps')
+    fig['layout'].update(layout)
+    for trace in iopsdata:
+        fig.append_trace(trace,1,1)
+    for trace in mbpsdata:
+        fig.append_trace(trace,2,1)
+    
+    py.plot(fig, filename='results/results.html',auto_open=False)
+    webbrowser.open('results/results.html', new=0)
+    
 def main():
     """
     Find files matching pattern WL*.fio in ./currentWL
@@ -336,6 +386,8 @@ def main():
 
     """    
     os.chdir(path='./currentWL')
+    shutil.rmtree('results',ignore_errors=True)
+    os.mkdir('results')
     clearScreen()
     workloadData = importExtractWorkloadData()
     print(createWorkloadTable(workloadData,1))  
@@ -402,15 +454,10 @@ def main():
             import fioDisplay,webbrowser
             for wlDict in workloadData:
                 print ('{0}{1}'.format('Starting Workload:',wlDict['filename']))
-                wlDict['process'] = runFIOprocess(wlDict['filename'])    
-                wlDict['status'] =  'Idle' 
-                wlDict['outputTrackingFile'] = wlDict['filename'].split('.')[0]+'.dat'
-                wlDict['wlDescription'] = ' '.join([wlDict['bs'],wlDict['rw']])
-                wlDict['targetDescription'] = 'SK hynix drive'
-                wlDict['dataType'] = 'IOPS'
+                runFIOprocess(wlDict)    
             print('\n'*(2*len(workloadData)+2))            
-            fioDisplay.createHTMLpage(workloadData,title='check title passage')
-            #webbrowser.open('fioDisplay.html',1)
+            #fioDisplay.createHTMLpage(workloadData,title='check title passage')
+            #webbrowser.open('fioDisplay.html',new=0)
             while any(wl['percentComplete'] != 100 for wl in workloadData):
                 #pprint(workloadData)
                 for workload in workloadData:
@@ -419,19 +466,24 @@ def main():
                         workload.update(get_value(line))
                         percent = float(workload['percentComplete'])
                         workload['status'] = progBar(percent)+' {0:3}%'.format(int(percent)) 
-                        perf = float(workload['performance'])
-                        f = open('{0}'.format(workload['filename'].split('.')[0])+'.dat','w')
-                        f.write(str(int(float('{:.{p}g}'.format(int(perf),p=3))))) #3 significant figures
-                        f.close()
-                        if 0 and perf > 10000:
-                            perf = '{:.1f}k'.format(perf/1000)
-                            workload['performance']=perf
+                        iops = int(float(workload['iops']))
+                        mbps = int(float(workload['mbps']))
+                        timestamp = datetime.datetime.isoformat(datetime.datetime.now())
+                        workload['outputTrackingFileH'].write(
+                            '{timestamp},{iops},{mbps}\n'.format(
+                            timestamp=timestamp,
+                            iops = str(int(float('{:.{p}g}'.format(iops,p=3)))),
+                            mbps = str(int(float('{:.{p}g}'.format(mbps,p=3))))
+                                )
+                            ) #3 significant figures
                         print('\x1b[A'*(2*len(workloadData)+5)+'\r') #move caret back to beginning of table
                         print(createWorkloadTable(workloadData,0)) #reprint workload monitor table
                     if line == '' and workload['process'].poll() is not None: 
-                        workload['percentComplete'] = 100
+                        workload['percentComplete'] = 100   
+                        workload['outputTrackingFileH'].close()
             print('\x1b[A'*(2*len(workloadData)+5)+'\r') #move caret back to beginning of table
             print(createWorkloadTable(workloadData,0)) #reprint workload monitor table
+            plotOutput()
     """                
     except KeyError as key: 
         if processTracker: 
@@ -441,6 +493,14 @@ def main():
         sys.exit()
     """   
     sys.stdout.flush()
+
+    if 0:
+        #Delete live output files
+        try: 
+            for x in workloadData:
+                os.remove(x['outputTrackingFile'])
+        except KeyError:
+            pass
     print('FIO-Generator Complete')
 
 if __name__ == "__main__":
