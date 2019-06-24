@@ -1,6 +1,7 @@
 #!/usr/bin/python3
-import subprocess,sys,os,re,copy,hashlib
+import subprocess,sys,os,re,copy,hashlib,datetime,shutil
 from tabulate import tabulate
+import plotly
 from pprint import pprint
 debug = 0
 def import_install(package):
@@ -223,7 +224,7 @@ def fileChecksum(file):
     return md5check
 
 
-def runFIOprocess(file):                  
+def runFIOprocess(workload):                  
     """
     Runs fio executable with JSON fio output for WL*.fio to WL*.log 
     
@@ -239,16 +240,22 @@ def runFIOprocess(file):
     try: 
         fioThread = subprocess.Popen(
             ['fio',
-            file,
+            workload['filename'],
             '--eta=always',
-            '--output={}'.format(file.split('.')[0]+'.log'),
+            '--output=results/{}'.format(workload['filename'].split('.')[0]+'.log'),
             '--output-format=json'
             ],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             universal_newlines=True,
             shell=False)
-        return (fioThread)    
+        workload['process'] = fioThread
+        workload['filename'].split('.')[0]+'.dat'
+        workload['wlDescription'] = ' '.join([workload['bs'],workload['rw']])
+        workload['targetDescription'] = 'SK hynix drive'
+        workload['dataType'] = 'IOPS'
+        workload['outputTrackingFileH'] = open('results/{0}.dat'.format(workload['filename'].split('.')[0]),'w')
+        workload['outputTrackingFileH'].write('timestamp,iops\n')        
     except Exception as e:
         print('runFIOprocess error: {0}'.format(e))
 
@@ -320,7 +327,33 @@ def progBar(percentage):
     progress += '-'*(barLength-len(progress))
     return progress
  
- 
+def plotOutput():
+    import glob
+    import plotly.offline as py
+    import plotly.graph_objs as go
+    import pandas as pd
+    import webbrowser
+    data = []
+    os.chdir('./results')
+    for filename in glob.glob('*.dat'):
+        print(filename)
+        df = pd.read_csv(filename)
+        #sample_data_table = FF.create_table(df.head())
+        #py.plot(sample_data_table, filename='sample-data-table')
+        trace = go.Scatter(
+                        x=df['timestamp'], y=df['iops'], # Data
+                        mode='lines', name=filename # Additional options
+                       )
+        data.append(trace)
+
+    layout = go.Layout(title='Simple Plot from csv data',
+                       plot_bgcolor='rgb(230, 230,230)')
+
+    fig = go.Figure(data=data, layout=layout)
+
+    py.plot(fig, filename='results.html',auto_open=False)
+    webbrowser.open('results.html', new=0)
+
 def main():
     """
     Find files matching pattern WL*.fio in ./currentWL
@@ -336,6 +369,8 @@ def main():
 
     """    
     os.chdir(path='./currentWL')
+    shutil.rmtree('results',ignore_errors=True)
+    os.mkdir('results')
     clearScreen()
     workloadData = importExtractWorkloadData()
     print(createWorkloadTable(workloadData,1))  
@@ -402,15 +437,10 @@ def main():
             import fioDisplay,webbrowser
             for wlDict in workloadData:
                 print ('{0}{1}'.format('Starting Workload:',wlDict['filename']))
-                wlDict['process'] = runFIOprocess(wlDict['filename'])    
-                wlDict['status'] =  'Idle' 
-                wlDict['outputTrackingFile'] = wlDict['filename'].split('.')[0]+'.dat'
-                wlDict['wlDescription'] = ' '.join([wlDict['bs'],wlDict['rw']])
-                wlDict['targetDescription'] = 'SK hynix drive'
-                wlDict['dataType'] = 'IOPS'
+                runFIOprocess(wlDict)    
             print('\n'*(2*len(workloadData)+2))            
-            fioDisplay.createHTMLpage(workloadData,title='check title passage')
-            #webbrowser.open('fioDisplay.html',1)
+            #fioDisplay.createHTMLpage(workloadData,title='check title passage')
+            #webbrowser.open('fioDisplay.html',new=0)
             while any(wl['percentComplete'] != 100 for wl in workloadData):
                 #pprint(workloadData)
                 for workload in workloadData:
@@ -420,16 +450,14 @@ def main():
                         percent = float(workload['percentComplete'])
                         workload['status'] = progBar(percent)+' {0:3}%'.format(int(percent)) 
                         perf = float(workload['performance'])
-                        f = open('{0}'.format(workload['filename'].split('.')[0])+'.dat','w')
-                        f.write(str(int(float('{:.{p}g}'.format(int(perf),p=3))))) #3 significant figures
-                        f.close()
-                        if 0 and perf > 10000:
-                            perf = '{:.1f}k'.format(perf/1000)
-                            workload['performance']=perf
+                        timestamp = datetime.datetime.isoformat(datetime.datetime.now())
+                        workload['outputTrackingFileH'].write(
+                            '{0},{1}\n'.format(timestamp,str(int(float('{:.{p}g}'.format(int(perf),p=3)))))) #3 significant figures
                         print('\x1b[A'*(2*len(workloadData)+5)+'\r') #move caret back to beginning of table
                         print(createWorkloadTable(workloadData,0)) #reprint workload monitor table
                     if line == '' and workload['process'].poll() is not None: 
-                        workload['percentComplete'] = 100
+                        workload['percentComplete'] = 100   
+                        workload['outputTrackingFileH'].close()
             print('\x1b[A'*(2*len(workloadData)+5)+'\r') #move caret back to beginning of table
             print(createWorkloadTable(workloadData,0)) #reprint workload monitor table
     """                
@@ -441,6 +469,14 @@ def main():
         sys.exit()
     """   
     sys.stdout.flush()
+    plotOutput()
+    if 0:
+        #Delete live output files
+        try: 
+            for x in workloadData:
+                os.remove(x['outputTrackingFile'])
+        except KeyError:
+            pass
     print('FIO-Generator Complete')
 
 if __name__ == "__main__":
