@@ -1,20 +1,35 @@
 #!/usr/bin/python3
 import subprocess,sys,os,re,copy,hashlib,datetime,shutil
 from tabulate import tabulate
-import plotly
+
 from pprint import pprint
 debug = 0
+
 def import_install(package):
     try:
         __import__(package)
+        return 0
     except ImportError:
         #from pip._internal import main as pip
         #pip(['install',package])
-        print ('Package not found: {0}, \n Importing package, please wait...'.format(package))
-        subprocess.call([sys.executable,'-m','pip','install',package])
+        print ('--- Package not found: \'{0)\' --- \n Importing package, please wait...'.format(package))
+        install = subprocess.call(['sudo',sys.executable,'-m','pip','install',package])
+        return install
+    
+#import/install PyInquirer and plotly modules locally/through pip 
+#if no internet or pip, disable workload generation from PyInquirer/fioGenerator and output plotting with plotly
+disable_fioGenerator = import_install('PyInquirer')
+disable_plotly = import_install('plotly')  
+disable_plotly |=   import_install('pandas')
 
-import_install('PyInquirer')
-import fioSelector
+if disable_plotly == 0:
+    from plotly import tools
+    import plotly.offline as py
+    import plotly.graph_objs as go
+    import pandas 
+
+if disable_fioGenerator == 0:
+    import fioGenerator
 
 
 def find_drives(display):
@@ -84,7 +99,13 @@ def importExtractWorkloadData():
         
     Returns: 
         workloadData (list of dicts): list of lists containing one workload file per entry;
-            [   {'filename'='WL*.fio','bs'=%bs1,'rw'='rw1','readPercent'=%rwmixread1,'numJobs'=%numjobs1,'iodepth'=%iodepth1,'size'='%size1', runtime1},
+            [   {'filename'='WL*.fio',
+                'bs'=%bs1,'rw'='rw1',
+                'readPercent'=%rwmixread1,
+                'numJobs'=%numjobs1,
+                'iodepth'=%iodepth1,
+                'size'='%size1', 
+                untime1},
                 {filename2, bs2, ...}
             ]
     """
@@ -114,7 +135,9 @@ def importExtractWorkloadData():
                 print ('*** Warning: Target drive: {0} is not detected on the system! ***'.format(target))
             fileChk = fileChecksum(workload_file)
             if fileChk in dupCheck: 
-                print ('*** Warning: These are duplicate workloads!!! ***\n  \u250F\u2501\u26A0 {0}\n  \u2517\u2501\u26A0 {1}'.format(workload_file,dupCheck[fileChecksum(workload_file)]))
+                print ('*** Warning: These are duplicate workloads!!! ***\n',  
+                        '\u250F\u2501\u26A0 {0}\n'.format(workload_file),  
+                        '\u2517\u2501\u26A0 {0}'.format(dupCheck[fileChecksum(workload_file)]))
             else : 
                 dupCheck[fileChecksum(workload_file)] = workload_file
             workloadData.append({'filename':workload_file,
@@ -141,13 +164,6 @@ def importExtractWorkloadData():
     if not workloadFiles:
         print ('*** Workload list EMPTY! ***')
     return workloadData
-'''[
-    {'status': 'Idle', 'target': '/vdb', 'time': '6s', 'numJobs': 2, 'bs': '4k', 'filename': 'WL_83ababe207b11dd9d987f4f091eb12ba.fio', 'readPercent': '100/0', 'size': '100M', 'rw': 'randrw', 'iodepth': 16}, 
-    {'status': 'Idle', 'target': '/vdb', 'time': '10s', 'numJobs': 2, 'bs': '128k', 'filename': 'WL_8166631393ae3f44ce7dec3bcc1cd1c2.fio', 'readPercent': '70/30', 'size': '10%', 'rw': 'rw', 'iodepth': 4}, 
-    {'status': 'Idle', 'target': '/vdb', 'time': '15s', 'numJobs': 1, 'bs': '1M', 'filename': 'WL_61ec5f6d5b457b982654bf8465ca63fb.fio', 'readPercent': '100/0', 'size': '50M', 'rw': 'rw', 'iodepth': 4}, 
-    {'status': 'Idle', 'target': '/vdb', 'time': '15s', 'numJobs': 1, 'bs': '1M', 'filename': 'WL_dupetest.fio', 'readPercent': '100/0', 'size': '50M', 'rw': 'rw', 'iodepth': 4}
-    ]    
-'''
     
     
 def delete_workloads(deletion_list):
@@ -174,16 +190,16 @@ def clearScreen():
 
 def create_workload(targets):
     """
-    Create WL*.fio file from fioSelector.py selector module
+    Create WL*.fio file from fioGenerator.py selector module
     
     Parameters: 
         targets (list): a list of target drives that will be passed to fioSelector
     
     Output:
-        WL_[md5sum].fio file: a fio workload file containining selected parameters passed back from fioSelector.py     
+        WL_[md5sum].fio file: a fio workload file containining selected parameters passed back from fioGenerator.py     
     """
     try: 
-        newWL = fioSelector.create_fio(targets)
+        newWL = fioGenerator.create_fio(targets)
         f = open('WL_temp.fio','w')
         f.write('[WL]\n' 
                 'group_reporting=1\n'
@@ -270,9 +286,9 @@ def to_number(mstring):
         # print 'to_number: groups', m.group(1), m.group(2)
         v = float(m.group(1))
         units = m.group(2)
-        if units == 'MiB/s':
+        if units in ['MiB','MB']:
             return v * 1.024 * 1.024    # Mbps
-        elif units == 'KiB/s':
+        elif units in ['KiB','KB']:
             return v * 0.001024    # Mbps
         elif units == 'k':
             return v*1000            # IOPS
@@ -284,12 +300,28 @@ def to_number(mstring):
    
 def get_value(line):
     """Parse continuous fio output and get requested value"""
-    # jobs: 1 (f=1): [R(1)][1.2%][r=1733MiB/s,w=0KiB/s][r=13.9k,w=0 IOPS][eta 59m:17s]
+    # fio 2.16-1 format:
+    #   Jobs: 1 (f=1): [R(1)] [37.5% done] [727.0MB/0KB/0KB /s] [727/0/0 iops] [eta 00m:10s]
+    # fio ?? format
+    #   jobs: 1 (f=1): [R(1)][1.2%][r=1733MiB/s,w=0KiB/s][r=13.9k,w=0 IOPS][eta 59m:17s]
+    # fio 3.12 format:
+    #   Jobs: 1 (f=1): [R(1)][40.0%][r=409MiB/s][r=409 IOPS][eta 00m:09s]
     result = {'percentComplete':'0',
                 'iops':'0',
                 'mbps':'0',
                 'eta':'Unknown'}
-    
+    pattern = r'(\[[^\]]+\])'    
+    m = re.findall(pattern,line)
+    if m:
+        m.pop(0)
+        result['percentComplete'] = re.search('\[([0-9]+[.0-9]+)%',m[0]).group(1)
+        result['mbps'] = sum([to_number(x) for x in re.findall('[0-9.]+[MmKk][Ii]*[Bb]',m[1])])
+        #array of 1 or more throughput numbers suffixed with M or K
+        result['iops'] = sum([to_number(x) for x in re.findall('[0-9.]+[Kk]*',m[2])])
+        #array of 1 or more iops numbers (may be suffixed with k)
+        result['eta'] = re.search('\[eta\s+([0-9hms:]+)',m[3]).group(1)
+                
+'''
     pattern = r'\[r=([^,]+),w=([^\]]+)\s+(?i)IOPS\]'
     m = re.search(pattern, line)
     if m:
@@ -306,6 +338,7 @@ def get_value(line):
     if m:
         r, w = to_number(m.group(1)), to_number(m.group(2))
         result['mbps'] = '{0:.1f}'.format(r + w)
+'''
     return result  
     
     
@@ -335,15 +368,11 @@ def progBar(percentage):
  
 def plotOutput():
     import glob
-    from plotly import tools
-    import plotly.offline as py
-    import plotly.graph_objs as go
-    import pandas as pd
     import webbrowser
     iopsdata,mbpsdata = [],[]
     
     for filename in glob.glob('results/*.dat'):
-        df = pd.read_csv(filename)
+        df = pandas.read_csv(filename)
         filename = filename[8:-4]
         shortname = (filename[:5]+'...'+filename[-5:]) if len(filename) > 10 else filename
         iopsTrace = go.Scatter( 
@@ -418,13 +447,16 @@ def main():
     
     # Ask user if they want to change workloads
     while True and not debug:
-        response = input("Do you want to change a workload? (Y/N) ")
+        response = input("Do you want to modify queued workloads? (Y/N) ")
         if response in ["Y","y"]:
-            response = input ('Do you want to add or delete a workload? (A/D) ')
-            # Add a workload
+            if disable_fioGenerator:
+                response = input ('Do you want to add workload from files, or delete a workload? (A/D) ')
+            else:
+                response = input ('Do you want to create workload, add workload from files, or delete a workload? (C/A/D) ')
+                if response in ['c','C']:
+                    create_workload(targets)
             if response in ['a','A']:
-                create_workload(targets)
-            # Delete a workload
+                pass #add from ranger
             elif response in ['d','D']:
                 while True:
                     try:
@@ -455,11 +487,10 @@ def main():
             for wlDict in workloadData:
                 print ('{0}{1}'.format('Starting Workload:',wlDict['filename']))
                 runFIOprocess(wlDict)    
-            print('\n'*(2*len(workloadData)+2))            
+            print('\n'*(2*len(workloadData)+3))            
             #fioDisplay.createHTMLpage(workloadData,title='check title passage')
             #webbrowser.open('fioDisplay.html',new=0)
             while any(wl['percentComplete'] != 100 for wl in workloadData):
-                #pprint(workloadData)
                 for workload in workloadData:
                     line = workload['process'].stdout.readline() #check/read new workload stdout
                     if line[0:4] == 'Jobs': #output is currently printing live status output from workload process
@@ -471,11 +502,10 @@ def main():
                         timestamp = datetime.datetime.isoformat(datetime.datetime.now())
                         workload['outputTrackingFileH'].write(
                             '{timestamp},{iops},{mbps}\n'.format(
-                            timestamp=timestamp,
-                            iops = str(int(float('{:.{p}g}'.format(iops,p=3)))),
-                            mbps = str(int(float('{:.{p}g}'.format(mbps,p=3))))
-                                )
-                            ) #3 significant figures
+                                timestamp=timestamp,
+                                iops = str(int(float('{:.{p}g}'.format(iops,p=3)))),
+                                mbps = str(int(float('{:.{p}g}'.format(mbps,p=3))))
+                                )) #3 significant figures
                         print('\x1b[A'*(2*len(workloadData)+5)+'\r') #move caret back to beginning of table
                         print(createWorkloadTable(workloadData,0)) #reprint workload monitor table
                     if line == '' and workload['process'].poll() is not None: 
