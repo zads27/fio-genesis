@@ -2,8 +2,7 @@
 from __future__ import print_function, unicode_literals
 from PyInquirer import style_from_dict, Token, prompt, Separator
 from pprint import pprint
-
-
+import os,glob
 
 style = style_from_dict({
     Token.Separator: '#cc5454',
@@ -14,6 +13,46 @@ style = style_from_dict({
     Token.Answer: '#f44336 bold',
     Token.Question: '',
 })
+
+def selectFIO():
+    #select/navigate directory
+    #if file selected, return file name 
+    #if directory or .. selected, change working dir and 
+    startdir = os.getcwd()
+    answers = ''
+    print ('')
+    while True: 
+        print('\x1b[A'+'\r')
+        navigation = [
+            {
+                'type': 'list',
+                'message': 'Current Directory:' + os.getcwd(),
+                'name': 'selection',
+                'choices': ['..'] + glob.glob('*/') + glob.glob('*.fio')
+            }
+        ]
+        answers = prompt(navigation, style=style)
+        if '..' in answers['selection']:
+            os.chdir('../')
+        elif '.' not in answers['selection']:
+            os.chdir(answers['selection'])
+        else:
+            break
+    if 1:    
+        selection= [        
+            {
+                'type': 'checkbox',
+                'message': 'Navigate directory',
+                'name': 'selection',
+                'choices': [{'name':x} for x in glob.glob(os.getcwd()+'/*.fio')],
+                'validate': lambda answer: 'You must choose one drive.' \
+                    if len(answer) == 0 else True
+            }
+        ]
+        answers = prompt(selection,style=style) 
+        os.chdir(startdir)
+        return answers
+            
 
 def create_fio(target):
     questions = [

@@ -1,6 +1,5 @@
 import os,sys,platform,subprocess
 
-
 def htmlMain(title,workloads): 
     systemName = ' '.join(platform.linux_distribution()) 
     fioVers = subprocess.check_output('fio -v',shell=1).decode('utf-8').split('-')[1]    
@@ -215,7 +214,7 @@ def createHTMLpage(displayWL, title='SK hynix SSD benchmark demo workloads'):
     HTMLpage = htmlMain('{0}'.format(title),workloadsContainerHTML)    
     
     for displayItem in displayWL:
-       HTMLpage += generateGraph(displayItem['outputTrackingFile'],displayItem['wlDescription'],displayWL.index(displayItem))
+       HTMLpage += generateGraph(displayItem['outputTrackingFileH'],displayItem['wlDescription'],displayWL.index(displayItem))
     
     f = open('fioDisplay.html','w')
     f.write(HTMLpage)

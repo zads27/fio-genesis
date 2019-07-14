@@ -433,7 +433,7 @@ class Actions(  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
             if ranger.args.choosefiles:
                 print(ranger.args.choosefiles)
-		paths = []
+                paths = []
                 for hist in self.fm.thistab.history:
                     for fobj in hist.files:
                         if fobj.marked and fobj.path not in paths:

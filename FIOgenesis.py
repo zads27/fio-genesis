@@ -1,9 +1,11 @@
 #!/usr/bin/python3
 import subprocess,sys,os,re,copy,hashlib,datetime,shutil
 from tabulate import tabulate
+from PyInquirer import style_from_dict, Token, prompt, Separator
 
 from pprint import pprint
 debug = 0
+
 
 def import_install(package):
     try:
@@ -56,8 +58,8 @@ def find_drives(display):
             print(drive)
     return(block_dev)
 
-    
-def createWorkloadTable(workloadData,showindex):
+
+def createWorkloadDF(workloadData,showindex):
     """
     Function to create a tabulate library table to display workloads detected and queued for running
     
@@ -69,29 +71,24 @@ def createWorkloadTable(workloadData,showindex):
             
     Returns:
         tabulate: a string with appropriate table formatting; exceeding terminal width will scramble the display formatting  
-    """
-    if showindex == 1:
-        #headers = {'filename':'Filename','target':'Trgt','bs':'BS','rw':'Rnd/Seq',
-        #            'readPercent':'R/W %','numJobs':'Jobs','iodepth':'QD','size':'Size','time':'Time','status':'Status'}          
-        headers = ['Filename','Trgt','BS','Rnd/Seq','R/W %','Jobs','QD','Size','Time','Status']          
-    else:
-        headers = ['Filename','Trgt','BS','Rnd/Seq','R/W %','ETA','Status','Perf\n[IOPS]','Perf\n[MBps]']              
-    for fileN in workloadData:
-        fileN['shortname'] = fileN['filename'][0:7]+'..'+fileN['filename'][-8:]
-    shortenedFilenameData = []
-    for wl in workloadData:
-        if showindex == 1:
-            shortenedFilenameData.append([wl['shortname'],wl['target'],wl['bs'],wl['rw'],wl['readPercent'],
-                                        wl['numJobs'],wl['iodepth'],wl['size'],wl['time'],wl['status']])
+    """ 
+    for x in workloadData:
+        if len(x['filename']) > 20:
+            x['file'] = x['filename'][:8] + '...' + x['filename'][-8:]
         else:
-            shortenedFilenameData.append([wl['shortname'],wl['target'],wl['bs'],wl['rw'],wl['readPercent'],
-                                        wl['eta'],wl['status'],wl['iops'],wl['mbps']])
-    return tabulate(shortenedFilenameData, headers=headers, showindex=showindex, tablefmt='fancy_grid')
-
+            x['file'] = x['filename']
+    df = pandas.DataFrame.from_dict(workloadData)
+    #pandas.set_option('max_colwidth',40)
+    if showindex == 1:
+        df = df[['file','target','bs','seqRand','readPercent','size','numJobs','iodepth','size','time']]
+    else:
+        df = df[['file','target','bs','seqRand','readPercent','iops','mbps','eta','status']].set_index('file')
+    return df
+   
     
 def importExtractWorkloadData():
     """
-    Find fio files from pre-set pattern WL*.fio and parse the critical command line parameters
+    Find fio files from pre-set pattern *.fio and parse the critical command line parameters
         Additionally, check for duplicate file content(via md5), or incomplete workload files 
     
     Parameters: 
@@ -99,20 +96,20 @@ def importExtractWorkloadData():
         
     Returns: 
         workloadData (list of dicts): list of lists containing one workload file per entry;
-            [   {'filename'='WL*.fio',
+            [   {'filename'='*.fio',
                 'bs'=%bs1,'rw'='rw1',
                 'readPercent'=%rwmixread1,
                 'numJobs'=%numjobs1,
                 'iodepth'=%iodepth1,
                 'size'='%size1', 
-                untime1},
+                runtime1},
                 {filename2, bs2, ...}
             ]
     """
     files = os.listdir()
     workloadFiles = []
     for filename in files:
-        if filename.startswith('WL') and filename.endswith('.fio'):
+        if filename.endswith('.fio'):
             workloadFiles.append(filename)     
     available_targets = find_drives(False)
     print ('Current workloads:')
@@ -125,12 +122,26 @@ def importExtractWorkloadData():
             target = [x.split('=')[1].strip() for x in workloadFileLines if x.startswith('filename')][0]
             bs = [x.split('=')[1].strip() for x in workloadFileLines if x.startswith('bs')][0]
             rw = [x.split('=')[1].strip() for x in workloadFileLines if x.startswith('rw')][0]
-            readPercent = int([x.split('=')[1].strip() for x in workloadFileLines if x.startswith('rwmixread')][0])
+            if not rw: 
+                rw = [x.split('=')[1].strip() for x in workloadFileLines if x.startswith('readwrite')][0]
+            if rw in ['read','write','rw','readwrite']:
+                seqRand = 'seq'
+            elif rw in ['randread','randwrite','randrw']:
+                seqRand = 'rand'
+            if rw in ['read','randread']:
+                readPercent = 100
+            elif rw in ['write','randwrite']:
+                readPercent = 0
+            else: 
+                readPercent = int([x.split('=')[1].strip() for x in workloadFileLines if x.startswith('rwmixread')][0])
             readPercent = '{0}/{1}'.format(readPercent,100-readPercent)
             numJobs = int([x.split('=')[1].strip() for x in workloadFileLines if x.startswith('numjobs')][0])
             iodepth = int([x.split('=')[1].strip() for x in workloadFileLines if x.startswith('iodepth')][0])
             size = [x.split('=')[1].strip() for x in workloadFileLines if x.startswith('size')][0]
-            time = [x.split('=')[1].strip() for x in workloadFileLines if x.startswith('runtime')][0]            
+            if int([x.split('=')[1].strip() for x in workloadFileLines if x.startswith('time_based')][0])   :
+                time = [x.split('=')[1].strip() for x in workloadFileLines if x.startswith('runtime')][0]
+            else: 
+                time = 0         
             if str(target) not in available_targets:
                 print ('*** Warning: Target drive: {0} is not detected on the system! ***'.format(target))
             fileChk = fileChecksum(workload_file)
@@ -144,6 +155,7 @@ def importExtractWorkloadData():
                                     'target':target,
                                     'bs':bs,
                                     'rw':rw,
+                                    'seqRand':seqRand,
                                     'readPercent':readPercent,
                                     'numJobs':numJobs,
                                     'iodepth':iodepth,
@@ -155,7 +167,7 @@ def importExtractWorkloadData():
                                     'mbps':'0',
                                     'percentComplete':0})
         except (IndexError,ValueError):
-            print ('\n*** ERROR: Incomplete/Missing data from WL file: {0} ***'.format(workload_file))
+            print ('\n*** ERROR: Could not parse complete data from WL file: {0} ***'.format(workload_file))
             print ('This file must be deleted or the program will exit.')
             if input ('Do you want to delete this file?') in ['Y','y']:
                 os.remove(workload_file)
@@ -163,6 +175,7 @@ def importExtractWorkloadData():
                 sys.exit()
     if not workloadFiles:
         print ('*** Workload list EMPTY! ***')
+    print('')
     return workloadData
     
     
@@ -223,12 +236,16 @@ def create_workload(targets):
                     time = ('time_based=1 \nruntime={0}'.format(newWL['time']) if newWL['time'] else ''),
                     jobs = newWL['jobs'] ))
         f.close()
-        newName = fileChecksum('WL_temp.fio')
         try: 
-            os.rename('WL_temp.fio','WL_{0}.fio'.format(newName))
+            newName = input("Enter new fio file name (enter will use file checksum as filename):\n")
+            if not newName: 
+                newName = fileChecksum('WL_temp.fio')
+                os.rename('WL_temp.fio','WL_{0}.fio'.format(newName))
+            else:
+                os.rename('WL_temp.fio','{0}.fio'.format(newName))
         except FileExistsError: 
             print ('*** This is a duplicate workload! Workload file not created. ***')
-            os.remove('WL.fio')
+            os.remove('WL_temp.fio')
             input('Enter to continue')
     except:
         print ('Error in file workload completion')
@@ -257,11 +274,10 @@ def runFIOprocess(workload):
     try: 
         fioThread = subprocess.Popen(
             ['fio',
-            workload['filename'],
-            '--eta=always',
-            '--output=results/{}'.format(workload['filename'].split('.')[0]+'.log'),
-            '--output-format=json'
-            ],
+                workload['filename'],
+                '--eta=always',
+                '--output=results/{}'.format(workload['filename'].split('.')[0]+'.log'),
+                '--output-format=json'],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             universal_newlines=True,
@@ -315,11 +331,12 @@ def get_value(line):
     if m:
         m.pop(0)
         result['percentComplete'] = re.search('\[([0-9]+[.0-9]+)%',m[0]).group(1)
-        result['mbps'] = sum([to_number(x) for x in re.findall('[0-9.]+[MmKk][Ii]*[Bb]',m[1])])
+        result['mbps'] = '{0:.1f}'.format(sum([to_number(x) for x in re.findall('[0-9.]+[MmKk][Ii]*[Bb]',m[1])]))
         #array of 1 or more throughput numbers suffixed with M or K
-        result['iops'] = sum([to_number(x) for x in re.findall('[0-9.]+[Kk]*',m[2])])
+        result['iops'] = '{0:2f}'.format(sum([to_number(x) for x in re.findall('[0-9.]+[Kk]*',m[2])]))
         #array of 1 or more iops numbers (may be suffixed with k)
         result['eta'] = re.search('\[eta\s+([0-9hms:]+)',m[3]).group(1)
+    return result  
                 
 '''
     pattern = r'\[r=([^,]+),w=([^\]]+)\s+(?i)IOPS\]'
@@ -339,7 +356,6 @@ def get_value(line):
         r, w = to_number(m.group(1)), to_number(m.group(2))
         result['mbps'] = '{0:.1f}'.format(r + w)
 '''
-    return result  
     
     
 def progBar(percentage):
@@ -352,7 +368,7 @@ def progBar(percentage):
     Returns: 
         String of length 'barLength' (hardcoded) shaded according to progress percentage
     """
-    barLength = 30
+    barLength = 40
     progress = '\u2588'*int(percentage*barLength/100)
     segmentSpan = 100/barLength
     segmentRemainder = percentage % barLength
@@ -365,7 +381,8 @@ def progBar(percentage):
             progress += '\u2593' #dark shade
     progress += '-'*(barLength-len(progress))
     return progress
- 
+    
+
 def plotOutput():
     import glob
     import webbrowser
@@ -400,6 +417,7 @@ def plotOutput():
     py.plot(fig, filename='results/results.html',auto_open=False)
     webbrowser.open('results/results.html', new=0)
 
+
 def main():
     """
     Find files matching pattern WL*.fio in ./currentWL
@@ -417,83 +435,64 @@ def main():
     os.chdir(path='./currentWL')
     shutil.rmtree('results',ignore_errors=True)
     os.mkdir('results')
-    clearScreen()
-    workloadData = importExtractWorkloadData()
-    print(createWorkloadTable(workloadData,1))  
-
-    ### Ask user if they want to keep the existing current workloads
-    while True  :
-        try:
-            keep_Workloads = input("Do you want to use existing workloads?")
-            if keep_Workloads not in ['y','Y','n','N']:
-                raise ValueError
-            elif keep_Workloads in ['y','Y']:
-                keep_Workloads = True
-            else:
-                keep_Workloads = False
-            break
-        except ValueError:
-            print ("Sorry I didn't understand that response")
-            continue
-        
-    ### Delete or keep previous workloads with pattern WL*.fio 
-    if not keep_Workloads:
-        delete_workloads([x['filename'] for x in workloadData])
-
-    ### List target drives available
-    clearScreen()
-    print(createWorkloadTable(importExtractWorkloadData(),1)) 
-    targets = find_drives(True)
+    targets = find_drives(True)       
     
-    # Ask user if they want to change workloads
-    while True and not debug:
-        response = input("Do you want to modify queued workloads? (Y/N) ")
-        if response in ["Y","y"]:
-            if disable_fioGenerator:
-                response = input ('Do you want to add workload from files, or delete a workload? (A/D) ')
-            else:
-                response = input ('Do you want to create workload, add workload from files, or delete a workload? (C/A/D) ')
-                if response in ['c','C']:
-                    create_workload(targets)
-            if response in ['a','A']:
-                pass #add from ranger
-            elif response in ['d','D']:
-                while True:
-                    try:
-                        deletionID = input ('Which workload do you want to delete? (X to exit)')
-                        if deletionID in ['x','X']:
-                            break
-                        deletionID = int(deletionID)
-                        os.remove(workloadData[deletionID]['filename'])   
-                        print ('file deleted: {0}'.format(workloadData[deletionID]['filename']))    
-                    except ValueError:
-                        print ('Sorry, I did not understand the deletion number')
-            clearScreen()
-            print(createWorkloadTable(importExtractWorkloadData(),1)) 
-        elif response in ['n','N']:
-            break
-        else:
-            print ("Sorry, I could not understand that response.")
-    clearScreen()
-    workloadData = importExtractWorkloadData()
-    print(createWorkloadTable(workloadData,1))
-    
-    # Import WLs  from files and Run target workloads, display progress bars 
-    if 1:#try:
-        if input("Do you want to run these workloads? (Y/N) ") in ["Y","y"]:
-            # processTracker = {filename:{process: processHandle, percentage:0,performance:0,eta:0},
-            #                    filename2:{process2: processHandle2, percentage:0,performance:0,eta:0}}
+    while True: 
+        clearScreen()
+        workloadData = importExtractWorkloadData()
+        print(createWorkloadDF(workloadData,1))
+        print('')   
+
+        userAction = [{
+                'type': 'list',
+                'message': 'Select Action:',
+                'name': 'action',
+                'choices': ['Create a workload', 
+                            'Import a workload', 
+                            'Delete a workload',
+                            'Run all currently queued workloads',
+                            'Exit FIOgenesis']
+                }]   
+        action = prompt(userAction,style=fioGenerator.style)['action']
+       
+        if action == 'Create a workload':
+            create_workload(targets)
+       
+        elif action == 'Import a workload':
+            for files in fioGenerator.selectFIO()['selection']:
+                shutil.copy(files,os.getcwd())
+       
+        elif action == 'Delete a workload':
+            print('\x1b[A'*(len(workloadData)+3)+'\r')
+            df = createWorkloadDF(workloadData,1)
+            deletion = [{
+                'type': 'checkbox',
+                'message': 'Select Files for deletion:',
+                'name': 'deletionSelection',
+                'choices': [{'name':x} for x in df.to_string().split('\n')[1:]]
+                }]                
+            delFiles = prompt(deletion,style=fioGenerator.style)['deletionSelection']
+            for x in delFiles:
+                print(df['filename'][int(x[0])])
+            confirm = input("Are you sure you want to delete these files?")
+            if confirm in ['y','Y']:
+                for x in delFiles:
+                    os.remove(df['filename'][int(x[0])])
+       
+        elif action == 'Run all currently queued workloads':
             import fioDisplay,webbrowser
             for wlDict in workloadData:
                 print ('{0}{1}'.format('Starting Workload:',wlDict['filename']))
-                runFIOprocess(wlDict)    
-            print('\n'*(2*len(workloadData)+3))            
-            #fioDisplay.createHTMLpage(workloadData,title='check title passage')
+                runFIOprocess(wlDict)
+
+            fioDisplay.createHTMLpage(workloadData,title='Live FIO Benchmark display')
             #webbrowser.open('fioDisplay.html',new=0)
+            
+            print('\n'*(len(workloadData)+2))              
             while any(wl['percentComplete'] != 100 for wl in workloadData):
                 for workload in workloadData:
-                    line = workload['process'].stdout.readline() #check/read new workload stdout
-                    if line[0:4] == 'Jobs': #output is currently printing live status output from workload process
+                    line = workload['process'].stdout.readline() 
+                    if line[0:4] == 'Jobs':
                         workload.update(get_value(line))
                         percent = float(workload['percentComplete'])
                         workload['status'] = progBar(percent)+' {0:3}%'.format(int(percent)) 
@@ -506,31 +505,21 @@ def main():
                                 iops = str(int(float('{:.{p}g}'.format(iops,p=3)))),
                                 mbps = str(int(float('{:.{p}g}'.format(mbps,p=3))))
                                 )) #3 significant figures
-                        print('\x1b[A'*(2*len(workloadData)+5)+'\r') #move caret back to beginning of table
-                        print(createWorkloadTable(workloadData,0)) #reprint workload monitor table
+                        print('\x1b[A'*(len(workloadData)+3)+'\r') #move caret back to beginning of table
+                        print(createWorkloadDF(workloadData,0)) #reprint workload monitor table
                     if line == '' and workload['process'].poll() is not None: 
                         workload['percentComplete'] = 100   
                         workload['outputTrackingFileH'].close()
-            print('\x1b[A'*(2*len(workloadData)+5)+'\r') #move caret back to beginning of table
-            print(createWorkloadTable(workloadData,0)) #reprint workload monitor table
-            plotOutput()
-    """                
-    except KeyError as key: 
-        if processTracker: 
-            print ('possible error? \n {0}'.format(key))
-    except Exception as e:
-        print ('error: {0}'.format(e))
-        sys.exit()
-    """   
-    sys.stdout.flush()
-    if 0:
-        #Delete live output files
-        try: 
-            for x in workloadData:
-                os.remove(x['outputTrackingFile'])
-        except KeyError:
-            pass
-    print('FIO-Generator Complete')
-
+            print('\x1b[A'*(len(workloadData)+3)+'\r') #move caret back to beginning of table
+            print(createWorkloadDF(workloadData,0)) #reprint workload monitor table
+            input('Press Enter to continue')
+            #plotOutput()
+            
+        elif action == 'Exit FIOgenesis':
+            break
+    
+    print('FIO-Generator Complete')        
+ 
+ 
 if __name__ == "__main__":
     main()  
