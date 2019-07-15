@@ -1,4 +1,5 @@
-import os,sys,platform,subprocess
+#Standard Libs 
+import platform,subprocess
 
 def htmlMain(title,workloads): 
     systemName = ' '.join(platform.linux_distribution()) 
@@ -172,6 +173,7 @@ function (chart) {{
 }});
 </script>
 """.format(resultFile=resultFile,workloadTitle=workloadTitle,ID=containerID)
+
 
 def createHTMLpage(displayWL, title='SK hynix SSD benchmark demo workloads'):
     """

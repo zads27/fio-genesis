@@ -1,8 +1,10 @@
 #!/usr/bin/python3
-from __future__ import print_function, unicode_literals
-from PyInquirer import style_from_dict, Token, prompt, Separator
-from pprint import pprint
+
+#Standard Libs
 import os,glob
+
+#Installed Libs
+from PyInquirer import style_from_dict, Token, prompt, Separator
 
 style = style_from_dict({
     Token.Separator: '#cc5454',

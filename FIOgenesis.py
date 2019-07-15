@@ -3,15 +3,14 @@
 #Standard Libs
 import subprocess,sys,os,copy,hashlib,shutil,glob,webbrowser
 
-#Installed Lib
+#Installed Libs
 import pandas
 from plotly import tools
 import plotly.offline as py
 import plotly.graph_objs as go
 from PyInquirer import style_from_dict, Token, prompt, Separator
-from pprint import pprint
 
-#Custom Lib
+#Custom Libs
 import fioGenerator,fioRunner
 
 debug = 0
