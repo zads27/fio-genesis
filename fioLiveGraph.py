@@ -216,7 +216,7 @@ def createHTMLpage(displayWL, title='SK hynix SSD benchmark demo workloads'):
     for displayItem in displayWL:
        HTMLpage += generateGraph(displayItem['outputTrackingFileH'],displayItem['wlDescription'],displayWL.index(displayItem))
     
-    f = open('fioDisplay.html','w')
+    f = open('fioLiveGraph.html','w')
     f.write(HTMLpage)
     f.close()        
 

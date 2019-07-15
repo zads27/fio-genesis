@@ -14,7 +14,7 @@ style = style_from_dict({
     Token.Question: '',
 })
 
-def selectFIO():
+def importFIO():
     #select/navigate directory
     #if file selected, return file name 
     #if directory or .. selected, change working dir and 
