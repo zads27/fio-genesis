@@ -2,7 +2,7 @@
 
 #Standard Libs
 import subprocess,os,re,datetime,webbrowser
-from multiprocessing import Process, Array  
+from multiprocessing import Process, Array, Manager
 
 #Installed Libs
 from pprint import pprint
@@ -118,7 +118,7 @@ def startFIOprocess(workload):
     """        
     try: 
         fioThread = subprocess.Popen(
-            ['fio',
+            ['sudo','fio',
                 workload['filename'],
                 '--eta=always',
                 '--output=results/{}'.format(workload['filename'].split('.')[0]+'.log'),
@@ -128,44 +128,42 @@ def startFIOprocess(workload):
             universal_newlines=True,
             shell=False)
         workload['process'] = fioThread
-        workload['filename'].split('.')[0]+'.dat'
         workload['wlDescription'] = ' '.join([workload['bs'],workload['rw']])
         workload['targetDescription'] = 'SK hynix drive'
-        workload['dataType'] = 'IOPS'
-        workload['outputTrackingFileH'] = open('results/{0}.dat'.format(workload['filename'].split('.')[0]),'w')
-        workload['outputTrackingFileH'].write('timestamp,iops,mbps\n')        
+        workload['outputTrackingFileH'] = 'results/{0}.dat'.format(workload['filename'].split('.')[0])
+        open(workload['outputTrackingFileH'],'w').write('timestamp,iops,mbps\n')        
     except Exception as e:
         print('startFIOprocess error: {0}'.format(e))
 
 
 def updateStatus(workload):#,df): 
-    line = workload['process'].stdout.readline() 
-    
-    if line[0:4] == 'Jobs':
-        workload.update(get_value(line))
-        percent = float(workload['percentComplete'])
-        workload['status'] = progBar(percent)+' {0:3}%'.format(int(percent)) 
-        iops = int(workload['iops'])
-        mbps = int(float(workload['mbps']))
-        timestamp = datetime.datetime.isoformat(datetime.datetime.now())
-        workload['outputTrackingFileH'].write(
-            '{timestamp},{iops},{mbps}\n'.format(
-                timestamp=timestamp,
-                iops = str(int(float('{:.{p}g}'.format(iops,p=3)))),
-                mbps = str(int(float('{:.{p}g}'.format(mbps,p=3))))
-                )) #3 significant figures
-        #df.at[workload['filename'],'status'] = workload['status']
-    if line == '' and workload['process'].poll() is not None: 
-        workload['percentComplete'] = 100   
-        workload['outputTrackingFileH'].close()
-
+    while 1:
+        line = workload['process'].stdout.readline() 
+        if line[0:4] == 'Jobs':
+            workload.update(get_value(line))
+            percent = float(workload['percentComplete'])
+            workload['status'] = progBar(percent)+' {0:3}%'.format(int(percent)) 
+            iops = int(workload['iops'])
+            mbps = int(float(workload['mbps']))
+            timestamp = datetime.datetime.isoformat(datetime.datetime.now())
+            workload['outputTrackingFileH'].write(
+                '{timestamp},{iops},{mbps}\n'.format(
+                    timestamp=timestamp,
+                    iops = str(int(float('{:.{p}g}'.format(iops,p=3)))),
+                    mbps = str(int(float('{:.{p}g}'.format(mbps,p=3))))
+                    )) #3 significant figures
+            #df.at[workload['filename'],'status'] = workload['status']
+        if line == '' and workload['process'].poll() is not None: 
+            workload['percentComplete'] = 100   
+            workload['outputTrackingFileH'].close()
+            break
 
 
 def runFIO(workloadData,liveDisplay):
     """
     Find files matching pattern WL*.fio in ./currentWL
     
-    Inputs: 
+    Inputs:     
         workloadData (list): of dict describing workload parameters
     
     Outputs:
@@ -176,9 +174,12 @@ def runFIO(workloadData,liveDisplay):
 
     """ 
     df = FIOgenesis.createWorkloadDF(workloadData,2)
+    import io
     for wlDict in workloadData:
         print ('{0}{1}'.format('Starting Workload:',wlDict['filename']))
-        startFIOprocess(wlDict)
+        manager = Manager().dict(wlDict)
+        startFIOprocess(manager)
+        Process(target=updateStatus, args=(manager,)).start()
         
     if liveDisplay:
         fioLiveGraph.createHTMLpage(workloadData,title='Live FIO Benchmark display')
@@ -186,18 +187,10 @@ def runFIO(workloadData,liveDisplay):
     
     print('\n'*(len(workloadData)+1))       
     resetCaret = len(workloadData)+3
-    while workloadData:
-        for wl in workloadData:
-            if wl['percentComplete'] != 100:
-                updateStatus(wl)
-                df.at[wl['filename'],'status'] = wl['iops']
-                df.at[wl['filename'],'mbps'] = wl['mbps']
-                df.at[wl['filename'],'eta'] = wl['eta']
-                df.at[wl['filename'],'status'] = wl['status']
-            else:
-                workloadData.remove(wl)
-            print('\x1b[A'*(resetCaret)+'\r') #move caret back to beginning of table
-            print(df.set_index('file')) #reprint workload monitor table
+    while any(wl['percentComplete'] != 100 for wl in workloadData):
+        df = FIOgenesis.createWorkloadDF(workloadData,2)
+        print('\x1b[A'*(resetCaret)+'\r') #move caret back to beginning of table
+        print(df.set_index('file')) #reprint workload monitor table
         
         #print('Update Cycle time: {0}'.format(datetime.datetime.now()-start))                
         

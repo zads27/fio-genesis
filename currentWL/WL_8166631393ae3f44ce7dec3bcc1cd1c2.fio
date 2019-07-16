@@ -1,0 +1,13 @@
+[WL]
+name=fio-rand-RW
+filename=/vdb
+rw=rw
+rwmixread=70
+bs=128k
+direct=1
+size=10%
+ioengine=libaio
+iodepth=4
+time_based=1 
+runtime=10s
+numjobs=2

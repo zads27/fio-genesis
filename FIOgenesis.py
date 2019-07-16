@@ -357,7 +357,7 @@ def main():
                 pass
                 
         elif action == 'Run all currently queued workloads':
-            try:
+            if 1:#try:
                 confirm = 1 if not os.path.isdir('results') else input('Previous Results will be overwritten! Continue?')
                 if confirm not in ['n','N','x','X']:
                     shutil.rmtree('results',ignore_errors=True)
@@ -377,7 +377,7 @@ def main():
                         }]   
                     if prompt(question,style=fioGenerator.style)['plotResults']:
                         plotOutput()
-            except: 
+            #except: 
                 pass    
         elif action == 'Exit FIOgenesis':
             break
