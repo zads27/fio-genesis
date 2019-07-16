@@ -118,7 +118,8 @@ def startFIOprocess(workload):
     """        
     try: 
         fioThread = subprocess.Popen(
-            ['fio',
+            ['sudo', 
+                'fio',
                 workload['filename'],
                 '--eta=always',
                 '--output=results/{}'.format(workload['filename'].split('.')[0]+'.log'),
@@ -128,7 +129,6 @@ def startFIOprocess(workload):
             universal_newlines=True,
             shell=False)
         workload['process'] = fioThread
-        workload['filename'].split('.')[0]+'.dat'
         workload['wlDescription'] = ' '.join([workload['bs'],workload['rw']])
         workload['targetDescription'] = 'SK hynix drive'
         workload['dataType'] = 'IOPS'
