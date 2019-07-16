@@ -1,5 +1,10 @@
 #!/usr/bin/python3
-
+"""
+Base program for interactive fio workload generator/process monitor for running single/multiple fio workloads in parallel
+  
+To do:
+Use io.StringIO object for updating each process dynamically on line write instead of after all fio threads have updated values 
+"""
 #Standard Libs
 import subprocess,sys,os,copy,hashlib,shutil,glob,webbrowser
 
@@ -26,7 +31,21 @@ def import_install(package):
         print ('--- Package not found: \'{0)\' --- \n Importing package, please wait...'.format(package))
         install = subprocess.call(['sudo',sys.executable,'-m','pip','install',package])
         return install
-        
+
+
+def clearScreen():
+    """Perform screen/terminal clear"""
+    if 'linux' in sys.platform:
+        os.system('clear')
+    else:
+        os.system('cls')
+
+
+def fileChecksum(file):
+    """Return checksum of file specified by input [file]"""
+    md5check = hashlib.md5(open(file,'rb').read()).hexdigest()
+    return md5check
+            
 
 def find_drives(display):
     """
@@ -53,7 +72,7 @@ def find_drives(display):
     return(block_dev)
 
 
-def createWorkloadDF(workloadData,showindex):
+def createWorkloadDF(workloadData,dfType):
     """
     Function to create a pandas DataFrame to display workloads detected and queued for running
     
@@ -73,10 +92,11 @@ def createWorkloadDF(workloadData,showindex):
             x['file'] = x['filename']
     df = pandas.DataFrame.from_dict(workloadData)
     #pandas.set_option('max_colwidth',40)
-    if showindex == 1:
+    if dfType == 1: #clip some output for screen display
         df = df[['file','target','bs','seqRand','readPercent','size','numJobs','iodepth','size','time']]
-    else:
-        df = df[['file','target','bs','seqRand','readPercent','iops','mbps','eta','status']].set_index('file')
+    elif dfType == 2: #clip some output for process tracking display
+        df = df[['filename','file','target','bs','seqRand','readPercent','iops','mbps','eta','status']].set_index('filename')
+    #elif dfType == 0, no clipping of df
     return df
    
     
@@ -167,32 +187,12 @@ def importExtractWorkloadData():
                 os.remove(workload_file)
             else:
                 sys.exit()
+    print('')
     if not workloadFiles:
         print ('*** Workload list EMPTY! ***')
-    print('')
-    return workloadData
-    
-    
-def delete_workloads(deletion_list):
-    """Delete files from input (list) parameter"""
-    print ('')
-    print ('Files to be deleted:')
-    for file in deletion_list:
-        print (file)
-    if input("\n*** This will delete all previous jobs, Are you sure? ***") in ["Y","y"]:
-        for file in deletion_list:
-            if not debug:
-                os.remove(file)
-            print ('{0:<20}{1}'.format('Deleting file:',file))
-        print('')
-
-
-def clearScreen():
-    """Perform screen/terminal clear"""
-    if 'linux' in sys.platform:
-        os.system('clear')
     else:
-        os.system('cls')
+        return workloadData
+    
 
 
 def create_workload(targets):
@@ -244,12 +244,7 @@ def create_workload(targets):
     except:
         print ('Error in file workload completion')
         os.remove('WL_temp.fio')   
-        
-        
-def fileChecksum(file):
-    """Return checksum of file specified by input [file]"""
-    md5check = hashlib.md5(open(file,'rb').read()).hexdigest()
-    return md5check
+    
     
 def plotOutput():    
     iopsdata,mbpsdata = [],[]
@@ -305,19 +300,30 @@ def main():
     while True: 
         clearScreen()
         workloadData = importExtractWorkloadData()
-        print(createWorkloadDF(workloadData,1))
-        print('')   
-
-        userAction = [{
+        if workloadData: 
+            print(createWorkloadDF(workloadData,1))
+            userAction = [{
+                    'type': 'list',
+                    'message': 'Select Action:',
+                    'name': 'action',
+                    'choices': ['Create a workload', 
+                                'Import a workload', 
+                                'Delete a workload',
+                                'Run all currently queued workloads',
+                                'Exit FIOgenesis']
+                    }]
+        else:
+            print("No Workloads found in currentWL/")
+            userAction = [{
                 'type': 'list',
                 'message': 'Select Action:',
                 'name': 'action',
                 'choices': ['Create a workload', 
                             'Import a workload', 
-                            'Delete a workload',
-                            'Run all currently queued workloads',
                             'Exit FIOgenesis']
-                }]   
+                }]
+      
+        print('')              
         action = prompt(userAction,style=fioGenerator.style)['action']
        
         if action == 'Create a workload':
@@ -351,7 +357,7 @@ def main():
                 pass
                 
         elif action == 'Run all currently queued workloads':
-            try: 
+            try:
                 confirm = 1 if not os.path.isdir('results') else input('Previous Results will be overwritten! Continue?')
                 if confirm not in ['n','N','x','X']:
                     shutil.rmtree('results',ignore_errors=True)
@@ -372,11 +378,11 @@ def main():
                     if prompt(question,style=fioGenerator.style)['plotResults']:
                         plotOutput()
             except: 
-                print('Error: {0}'.format(1))
+                pass    
         elif action == 'Exit FIOgenesis':
             break
     
-    print('FIO-Generator Complete')        
+    print('FIO-genesis Complete')        
  
  
 if __name__ == "__main__":
