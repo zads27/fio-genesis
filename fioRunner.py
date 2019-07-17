@@ -134,7 +134,7 @@ def startFIOprocess(workload):
         workload['dataType'] = 'IOPS'
         workload['outputTrackingFileH'] = open('results/{0}.dat'.format(workload['filename'].split('.')[0]),'w')
         workload['outputTrackingFileH'].write('timestamp,iops,mbps\n')  
-        workload['outputTrackingFileL'] = workload['outputTrackingFileH']+'live'       
+        workload['outputTrackingFileL'] = workload['outputTrackingFileH'].name +'live'       
     except Exception as e:
         print('startFIOprocess error: {0}'.format(e))
 
@@ -153,7 +153,7 @@ def updateStatus(workload):#,df):
                 timestamp=timestamp,
                 iops = str(int(float('{:.{p}g}'.format(iops,p=3)))),
                 mbps = str(int(float('{:.{p}g}'.format(mbps,p=3))))
-                )) #3 significant figures
+                ) #3 significant figures
         workload['outputTrackingFileH'].write(data)
         open(workload['outputTrackingFileL'],'w').write(data)
             
