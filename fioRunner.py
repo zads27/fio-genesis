@@ -193,7 +193,7 @@ def runFIO(workloadData,liveDisplay):
         for wl in workloadData:
             if wl['percentComplete'] != 100:
                 updateStatus(wl)
-                df.at[wl['filename'],'status'] = wl['iops']
+                df.at[wl['filename'],'iops'] = wl['iops']
                 df.at[wl['filename'],'mbps'] = wl['mbps']
                 df.at[wl['filename'],'eta'] = wl['eta']
                 df.at[wl['filename'],'status'] = wl['status']

@@ -63,7 +63,7 @@ def graphContainer(position,containerID):
 def generateGraph(resultFile,workloadTitle,containerID):
     return """
 <script type="text/javascript">
-function loadiops(callback) {{   
+function loadperf{ID}(callback) {{   
 
     var xobj = new XMLHttpRequest();
         xobj.overrideMimeType("text/csv");
@@ -72,7 +72,7 @@ function loadiops(callback) {{
           //if (xobj.readyState == 4 && xobj.status == 200) {{
             // Required use of an anonymous callback as .open will NOT return a value but simply returns undefined in asynchronous mode
             // console.log(xobj.responseText);
-            callback(xobj.responseText.split(',')[1]);
+            callback(xobj.responseText.split(',')[1]/1000);
           //}}
     }};
     xobj.send();  
@@ -162,7 +162,7 @@ function (chart) {{
         setInterval(function () {{
             var point = chart.series[0].points[0],
                 newVal, newJSON;
-                loadiops(function(response) {{
+                loadperf{ID}(function(response) {{
                     newVal = parseFloat(response);
                     point.update(newVal);
                 }});
