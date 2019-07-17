@@ -133,7 +133,8 @@ def startFIOprocess(workload):
         workload['targetDescription'] = 'SK hynix drive'
         workload['dataType'] = 'IOPS'
         workload['outputTrackingFileH'] = open('results/{0}.dat'.format(workload['filename'].split('.')[0]),'w')
-        workload['outputTrackingFileH'].write('timestamp,iops,mbps\n')        
+        workload['outputTrackingFileH'].write('timestamp,iops,mbps\n')  
+        workload['outputTrackingFileL'] = workload['outputTrackingFileH']+'live'       
     except Exception as e:
         print('startFIOprocess error: {0}'.format(e))
 
@@ -148,12 +149,14 @@ def updateStatus(workload):#,df):
         iops = int(workload['iops'])
         mbps = int(float(workload['mbps']))
         timestamp = datetime.datetime.isoformat(datetime.datetime.now())
-        workload['outputTrackingFileH'].write(
-            '{timestamp},{iops},{mbps}\n'.format(
+        data = '{timestamp},{iops},{mbps}\n'.format(
                 timestamp=timestamp,
                 iops = str(int(float('{:.{p}g}'.format(iops,p=3)))),
                 mbps = str(int(float('{:.{p}g}'.format(mbps,p=3))))
                 )) #3 significant figures
+        workload['outputTrackingFileH'].write(data)
+        open(workload['outputTrackingFileL'],'w').write(data)
+            
         #df.at[workload['filename'],'status'] = workload['status']
     if line == '' and workload['process'].poll() is not None: 
         workload['percentComplete'] = 100   

@@ -66,13 +66,13 @@ def generateGraph(resultFile,workloadTitle,containerID):
 function loadiops(callback) {{   
 
     var xobj = new XMLHttpRequest();
-        xobj.overrideMimeType("application/json");
+        xobj.overrideMimeType("text/csv");
     xobj.open('GET', '{resultFile}', false); // Replace 'my_data' with the path to your file
     xobj.onreadystatechange = function () {{
           //if (xobj.readyState == 4 && xobj.status == 200) {{
             // Required use of an anonymous callback as .open will NOT return a value but simply returns undefined in asynchronous mode
             // console.log(xobj.responseText);
-            callback(xobj.responseText);
+            callback(xobj.responseText.split('\n')[-2]);
           //}}
     }};
     xobj.send();  
@@ -216,7 +216,7 @@ def createHTMLpage(displayWL, title='SK hynix SSD benchmark demo workloads'):
     HTMLpage = htmlMain('{0}'.format(title),workloadsContainerHTML)    
     
     for displayItem in displayWL:
-       HTMLpage += generateGraph(displayItem['outputTrackingFileH'],displayItem['wlDescription'],displayWL.index(displayItem))
+       HTMLpage += generateGraph(displayItem['outputTrackingFileL'],displayItem['wlDescription'],displayWL.index(displayItem))
     
     f = open('fioLiveGraph.html','w')
     f.write(HTMLpage)
