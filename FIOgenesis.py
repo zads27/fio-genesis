@@ -4,22 +4,34 @@ Base program for interactive fio workload generator/process monitor for running 
   
 To do:
 Use io.StringIO object for updating each process dynamically on line write instead of after all fio threads have updated values 
+Check targets for partition map and warn for write operations
+Add disk drive descriptions to drive list
 """
 #Standard Libs
 import subprocess,sys,os,copy,hashlib,shutil,glob,webbrowser
 
-#Installed Libs
+#Installed Libs/Utils
 import pandas
 from plotly import tools
 import plotly.offline as py
 import plotly.graph_objs as go
 from PyInquirer import style_from_dict, Token, prompt, Separator
+'lsscsi'
+'nvme-cli'
 
 #Custom Libs
 import fioGenerator,fioRunner
 
 debug = 0
 
+'''
+To do:
+if nvme:
+a = subprocess.Popen('sudo nvme list',stdout=subprocess.PIPE,shell=1)
+b = a.stdout.readlines() 
+b = [x.decode('utf-8').split() for x in b]
+
+'''
 
 def import_install(package):
     try:
@@ -58,18 +70,29 @@ def find_drives(display):
         block_dev (list): a list of handles containing the system drive handle 
     """
     if 'linux' in sys.platform:
-        block_dev = subprocess.check_output('lsblk')
-        block_dev = [x.decode('utf-8') for x in block_dev.splitlines() if x.decode('utf-8')[0] in ['n','s','v']]
-        block_dev = ['/'+x.split()[0] for x in block_dev]
+        lsblk = subprocess.check_output('lsblk').decode('utf-8')
+        lsblk = [x.split() for x in lsblk.splitlines() if x[0] in ['n','s','v']]
+        block_dev = {
+                    '/dev/'+line[0]: 
+                    line[3] + 
+                    ('   Mount Point:{}'.format(line[6]) if len(line)==7 else 'Not mounted')
+                        for line in lsblk
+                    }
+        #block_dev: {'/dev/sda':'Intel SSDSC2BB96 0101 894G'}
+        scsi_dev = [x.split() for x in subprocess.check_output('lsscsi').decode('utf-8')] 
+        for drive in scsi_dev:
+            if drive[-1] in block_dev: 
+                block_dev[drive[-1]] = '  '.join([drive[3],drive[4],drive[5],block_dev[drive[-1]])
+        #nvme_dev = subprocess.check_output('nvme')
+        
     else: #windows/testmode
         block_dev = subprocess.check_output('wmic diskdrive get name,model')
         block_dev = [x.decode('utf-8') for x in block_dev.splitlines() if x]
         block_dev = [x.strip() for x in block_dev if '\\' in x]
     if display:
         print('Target Drives available:')
-        for drive in block_dev:
-            print(drive)
-    return(block_dev)
+        print('\n'.join(drive+'   '+block_dev[drive] for drive in block_dev))
+    return(list(block_dev.keys()))
 
 
 def createWorkloadDF(workloadData,dfType):
@@ -181,6 +204,7 @@ def importExtractWorkloadData():
                                     'mbps':'0',
                                     'percentComplete':0})
         except (IndexError,ValueError):
+            #Remove to be able to run unparseable fio files?
             print ('\n*** ERROR: Could not parse complete data from WL file: {0} ***'.format(workload_file))
             print ('This file must be deleted or the program will exit.')
             if input ('Do you want to delete this file?') in ['Y','y']:
@@ -295,10 +319,11 @@ def main():
 
     """    
     os.chdir(path='./currentWL')
-    targets = find_drives(True)       
     
     while True: 
         clearScreen()
+        targets = find_drives(True)       
+    
         workloadData = importExtractWorkloadData()
         if workloadData: 
             print(createWorkloadDF(workloadData,1))
