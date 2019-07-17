@@ -172,7 +172,7 @@ function (chart) {{
                 }});
             point.update(newVal);
 
-        }}, 3000);
+        }}, 1000);
     }}
 }});
 </script>
