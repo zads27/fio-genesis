@@ -70,8 +70,8 @@ def find_drives(display):
         block_dev (list): a list of handles containing the system drive handle 
     """
     if 'linux' in sys.platform:
-        lsblk = subprocess.check_output('lsblk').decode('utf-8')
-        lsblk = [x.split() for x in lsblk.splitlines() if x[0] in ['n','s','v']]
+        lsblk = subprocess.check_output('lsblk').decode('utf-8').splitlines()
+        lsblk = [x.split() for x in lsblk if x[0] in ['n','s','v']]
         block_dev = {
                     '/dev/'+line[0]: 
                     line[3] + 
@@ -79,10 +79,10 @@ def find_drives(display):
                         for line in lsblk
                     }
         #block_dev: {'/dev/sda':'Intel SSDSC2BB96 0101 894G'}
-        scsi_dev = [x.split() for x in subprocess.check_output('lsscsi').decode('utf-8')] 
+        scsi_dev = [x.split() for x in subprocess.check_output('lsscsi').decode('utf-8').splitlines()] 
         for drive in scsi_dev:
             if drive[-1] in block_dev: 
-                block_dev[drive[-1]] = '  '.join([drive[3],drive[4],drive[5],block_dev[drive[-1]])
+                block_dev[drive[-1]] = '  '.join([drive[3],drive[4],drive[5],block_dev[drive[-1]]])
         #nvme_dev = subprocess.check_output('nvme')
         
     else: #windows/testmode
