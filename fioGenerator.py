@@ -62,18 +62,23 @@ def create_fio(target):
             'type': 'list',
             'message': 'Select target drive',
             'name': 'target',
-            'choices': target,
-            'validate': lambda answer: 'You must choose one drive.' \
-                if len(answer) == 0 else True
+            'choices': (target + ['*User defined target'])
         },
     
+        {
+            'type': 'input',
+            'message': '\u2517\u2501 Enter target drive/file',
+            'name': 'target',
+            'validate': lambda answer: 'You must enter a value.' \
+                if len(answer) == 0 else True,
+            'when': lambda answers: answers['target'] == '*User defined target'
+        }, 
+
         {
             'type': 'list',
             'message': 'Select target IO transaction size',
             'name': 'io_size',
-            'choices': ['4k','8k','16k','32k','64k','128k','Other'],
-            'validate': lambda answer: 'You must choose one value.' \
-                if len(answer) == 0 else True
+            'choices': ['4k','8k','16k','32k','64k','128k','Other']
         },
     
         {
