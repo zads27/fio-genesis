@@ -133,7 +133,7 @@ def startFIOprocess(workload):
                         'Disk Target = {}'.format(workload['target']),
                         'Block Size = {}'.format(workload['bs']),
                         'Rand/Seq = {}'.format(workload['rw']),
-                        'Read/Write% = {}'.format(workload['readPercent']
+                        'Read/Write% = {}'.format(workload['readPercent'])
                         ])
         workload['targetDescription'] = 'SK hynix drive'
         workload['dataType'] = 'IOPS'
