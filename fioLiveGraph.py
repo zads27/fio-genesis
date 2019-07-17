@@ -85,6 +85,10 @@ Highcharts.chart('u{ID}container', {{
     }},
 
     title: {{
+        text: '{resultFile}'
+    }},
+
+    subtitle: {{
         text: '{workloadTitle}'
     }},
 

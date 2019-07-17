@@ -129,11 +129,11 @@ def startFIOprocess(workload):
             universal_newlines=True,
             shell=False)
         workload['process'] = fioThread
-        workload['wlDescription'] = '\n'.join([
-                        'Disk Target = {}'.format(workload['target']),
-                        'Block Size = {}'.format(workload['bs']),
-                        'Rand/Seq = {}'.format(workload['rw']),
-                        'Read/Write% = {}'.format(workload['readPercent'])
+        workload['wlDescription'] = ' . . . '.join([
+                        'Target= {}'.format(workload['target']),
+                        'Block= {}'.format(workload['bs']),
+                        'Rnd/Seq= {}'.format(workload['rw']),
+                        'Rd/Wr= {}'.format(workload['readPercent'])
                         ])
         workload['targetDescription'] = 'SK hynix drive'
         workload['dataType'] = 'IOPS'
