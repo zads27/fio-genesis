@@ -72,18 +72,21 @@ def find_drives(display):
     if 'linux' in sys.platform:
         lsblk = subprocess.check_output('lsblk').decode('utf-8').splitlines()
         lsblk = [x.split() for x in lsblk if x[0] in ['n','s','v']]
-        block_dev = {
-                    '/dev/'+line[0]: 
-                    line[3] + 
-                    ('   Mount Point:{}'.format(line[6]) if len(line)==7 else 'Not mounted')
-                        for line in lsblk
-                    }
-        #block_dev: {'/dev/sda':'Intel SSDSC2BB96 0101 894G'}
+        lsblk = [['/dev/'+line[0],'','',line[3],line[6] if len(line)==7 else ''] for line in lsblk]
         scsi_dev = [x.split() for x in subprocess.check_output('lsscsi').decode('utf-8').splitlines()] 
-        for drive in scsi_dev:
-            if drive[-1] in block_dev: 
-                block_dev[drive[-1]] = '  '.join([drive[3],drive[4],drive[5],block_dev[drive[-1]]])
-        #nvme_dev = subprocess.check_output('nvme')
+        for x in lsblk: 
+            for drive in scsi_dev:           
+                if drive[-1] in x[0]:
+                    x[1] = drive[3]
+                    x[2] = drive[4]
+        nvme_dev = [x.split() for x in subprocess.check_output(['sudo','nvme','list']).decode('utf-8').splitlines()][2:] 
+        for x in lsblk: 
+            for drive in nvme_dev:           
+                if drive[0] in x[0]:
+                    x[1] = drive[2]
+                    x[2] = drive[-1]        
+        block_dev = pandas.DataFrame(lsblk,columns=['Target','Model','FW','Capacity','Mount Point'])
+        #block_dev: {Target:'/dev/sda', Cap:'Intel SSDSC2BB96', '0101', '894G'}
         
     else: #windows/testmode
         block_dev = subprocess.check_output('wmic diskdrive get name,model')
@@ -91,7 +94,7 @@ def find_drives(display):
         block_dev = [x.strip() for x in block_dev if '\\' in x]
     if display:
         print('Target Drives available:')
-        print('\n'.join(drive+'   '+block_dev[drive] for drive in block_dev))
+        print(block_dev)
     return(list(block_dev.keys()))
 
 
