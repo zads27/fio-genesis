@@ -77,8 +77,8 @@ def find_drives(display):
             try:
                 for x in range(len(line)):
                     if line[x].count('\"') == 1:
-                        line[x] += line.pop(x+1)
-                    line = line.replace('\"','')
+                        line[x] += ' '+line.pop(x+1)
+                    line[x] = line[x].replace('\"','')
             except:
                 pass    
         block_dev = pandas.DataFrame([dict(entry.split('=') for entry in row) for row in block_dev])    
