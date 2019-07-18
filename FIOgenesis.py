@@ -8,7 +8,7 @@ Check targets for partition map and warn for write operations
 Add disk drive descriptions to drive list
 """
 #Standard Libs
-import subprocess,sys,os,copy,hashlib,shutil,glob,webbrowser
+import subprocess,sys,os,copy,hashlib,shutil,glob,webbrowser,json
 
 #Installed Libs/Utils
 import pandas
@@ -70,22 +70,26 @@ def find_drives(display):
         block_dev (list): a list of handles containing the system drive handle 
     """
     if 'linux' in sys.platform:
-        lsblk = subprocess.check_output('lsblk').decode('utf-8').splitlines()
-        lsblk = [x.split() for x in lsblk if x[0] in ['n','s','v']]
-        block_dev = [['/dev/'+line[0],'-','-',line[3],line[6] if len(line)==7 else ''] for line in lsblk]
+        lsblk = subprocess.check_output(['lsblk','-Ppo','KNAME,MODEL,SIZE,TYPE,MOUNTPOINT,REV']).decode('utf-8').splitlines()
+        #lsblk = [x.split() for x in lsblk if x[0] in ['n','s','v']]
+        block_dev = [line.replace('\"','').split() for line in lsblk]
+        block_dev = pandas.DataFrame([dict(entry.split('=') for entry in row) for row in block_dev])    
+        block_dev.rename(columns={'KNAME':'TARGET'}, inplace=True)
+        block_dev.insert(len(block_dev.columns),'Firmware','-')
+        '''
         scsi_dev = [[x[30:46],x[47:51],x[53:].strip()] for x in subprocess.check_output('lsscsi').decode('utf-8').splitlines()] 
         for x in block_dev: 
             for drive in scsi_dev:           
                 if drive[-1] in x[0]:
                     x[1] = drive[0]
                     x[2] = drive[1]
-        nvme_dev = [x.split() for x in subprocess.check_output(['sudo','nvme','list']).decode('utf-8').splitlines()][2:] 
-        for x in block_dev: 
-            for drive in nvme_dev:           
-                if drive[0] in x[0]:
-                    x[1] = drive[2]
-                    x[2] = drive[-1]        
-        block_dev = pandas.DataFrame(block_dev,columns=['Target','Model','FW','Capacity','Mount Point'])
+        '''
+        try:
+            nvme_dev = json.loads(subprocess.check_output(['sudo','nvme','list','-o','json']).decode('utf-8'))
+            for drive in nvme_dev['Devices']:           
+                block_dev.loc[block_dev['DevicePath']==drive['DevicePath'],'Firmware'] = drive['Firmware']
+        except:
+            pass
         #block_dev: {Target:'/dev/sda', Cap:'Intel SSDSC2BB96', '0101', '894G'}
         
     else: #windows/testmode
@@ -95,9 +99,9 @@ def find_drives(display):
     
     if display:
         print('Target Drives available:')
-        print(block_dev.set_index('Target'))
+        print(block_dev.set_index('TARGET'))
         print('')
-    return(block_dev['Target'].tolist())
+    return(block_dev['TARGET'].tolist())
 
 
 def createWorkloadDF(workloadData,dfType):
