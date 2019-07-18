@@ -73,12 +73,12 @@ def find_drives(display):
         lsblk = subprocess.check_output('lsblk').decode('utf-8').splitlines()
         lsblk = [x.split() for x in lsblk if x[0] in ['n','s','v']]
         block_dev = [['/dev/'+line[0],'','',line[3],line[6] if len(line)==7 else ''] for line in lsblk]
-        scsi_dev = [(x[30:46],x[47:51],x[53:].strip()) for x in subprocess.check_output('lsscsi').decode('utf-8').splitlines()] 
+        scsi_dev = [[x[30:46],x[47:51],x[53:].strip()] for x in subprocess.check_output('lsscsi').decode('utf-8').splitlines()] 
         for x in block_dev: 
             for drive in scsi_dev:           
                 if drive[-1] in x[0]:
-                    x[1] = drive[3]
-                    x[2] = drive[4]
+                    x[1] = drive[0]
+                    x[2] = drive[1]
         nvme_dev = [x.split() for x in subprocess.check_output(['sudo','nvme','list']).decode('utf-8').splitlines()][2:] 
         for x in block_dev: 
             for drive in nvme_dev:           
