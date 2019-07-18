@@ -72,7 +72,15 @@ def find_drives(display):
     if 'linux' in sys.platform:
         lsblk = subprocess.check_output(['lsblk','-Ppo','KNAME,MODEL,SIZE,TYPE,MOUNTPOINT,REV']).decode('utf-8').splitlines()
         #lsblk = [x.split() for x in lsblk if x[0] in ['n','s','v']]
-        block_dev = [line.replace('\"','').split() for line in lsblk]
+        block_dev = [line.split() for line in lsblk]
+        for line in block_dev:
+            try:
+                for x in range(len(line)):
+                    if line[x].count('\"') == 1:
+                        line[x] += line.pop(x+1)
+                    line = line.replace('\"','')
+            except:
+                pass    
         block_dev = pandas.DataFrame([dict(entry.split('=') for entry in row) for row in block_dev])    
         block_dev.rename(columns={'KNAME':'TARGET'}, inplace=True)
         block_dev.insert(len(block_dev.columns),'Firmware','-')
