@@ -72,7 +72,7 @@ def find_drives(display):
     if 'linux' in sys.platform:
         lsblk = subprocess.check_output('lsblk').decode('utf-8').splitlines()
         lsblk = [x.split() for x in lsblk if x[0] in ['n','s','v']]
-        block_dev = [['/dev/'+line[0],'','',line[3],line[6] if len(line)==7 else ''] for line in lsblk]
+        block_dev = [['/dev/'+line[0],'-','-',line[3],line[6] if len(line)==7 else ''] for line in lsblk]
         scsi_dev = [[x[30:46],x[47:51],x[53:].strip()] for x in subprocess.check_output('lsscsi').decode('utf-8').splitlines()] 
         for x in block_dev: 
             for drive in scsi_dev:           
@@ -96,6 +96,7 @@ def find_drives(display):
     if display:
         print('Target Drives available:')
         print(block_dev.set_index('Target'))
+        print('')
     return(block_dev['Target'].tolist())
 
 
