@@ -318,7 +318,7 @@ def plotOutput():
     
     py.plot(fig, filename='results/results.html',auto_open=False)
     try: 
-        webbrowser.get('firefox').open('fioLiveGraph.html',new=0)
+        webbrowser.get('firefox').open('results/results.html',new=0)
     except:
         webbrowser.open('results/results.html', new=0)
     
