@@ -321,7 +321,6 @@ def plotOutput():
         webbrowser.get('firefox').open('fioLiveGraph.html',new=0)
     except:
         webbrowser.open('results/results.html', new=0)
-    subprocess.call(['firefox','results/results.html'])
     
 
 def main():
