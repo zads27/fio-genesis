@@ -317,8 +317,11 @@ def plotOutput():
         fig.append_trace(trace,2,1)
     
     py.plot(fig, filename='results/results.html',auto_open=False)
-    webbrowser.open('results/results.html', new=0)
-
+    try: 
+        webbrowser.get('firefox').open('fioLiveGraph.html',new=0)
+    except:
+        webbrowser.open('results/results.html', new=0)
+    subprocess.call(['firefox','results/results.html'])
     
 
 def main():

@@ -190,8 +190,11 @@ def runFIO(workloadData,liveDisplay):
         
     if liveDisplay:
         fioLiveGraph.createHTMLpage(workloadData)
-        webbrowser.open('fioLiveGraph.html',new=0)
-    
+        try: 
+            webbrowser.get('firefox').open('fioLiveGraph.html',new=0)
+        except:
+            webbrowser.open('fioLiveGraph.html',new=0)
+
     print('\n'*(len(workloadData)+1))       
     resetCaret = len(workloadData)+3
     while workloadData:
