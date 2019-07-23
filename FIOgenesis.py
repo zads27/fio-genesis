@@ -27,7 +27,6 @@ from PyInquirer import style_from_dict, Token, prompt, Separator
 
 #Custom Libs
 import fioGenerator,fioRunner
-
 debug = 0
 
 def import_install(package):
@@ -408,7 +407,7 @@ def main():
                         'message': 'Would you like to plot and display live Benchmark Data?:',
                         'name': 'liveDisplay',
                         'choices': [{'name':'IOPS','checked':False},
-                                    {'name':'QoS','checked':False, 'disabled':'Not yet implemented'}]
+                                    {'name':'QoS','checked':False}]
                          }]
                     fioRunner.runFIO(workloadData,prompt(live,style=fioGenerator.style)['liveDisplay'])
                     question = [{

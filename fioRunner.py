@@ -2,10 +2,12 @@
 
 #Standard Libs
 import subprocess,os,re,datetime,webbrowser
-from multiprocessing import Process, Array  
+from multiprocessing import Process, Array, Manager
+from threading import Thread
 
 #Installed Libs
 from pprint import pprint
+
 #Custom Libs
 import fioLiveGraph,FIOgenesis
 
@@ -144,44 +146,42 @@ def startFIOprocess(workload, QoS):
         workload['dataType'] = 'IOPS'
         workload['outputTrackingFileH'] = open('results/{0}.dat'.format(workload['filename'].split('.')[0]),'w')
         workload['outputTrackingFileH'].write('timestamp,iops,mbps\n')  
-        workload['outputTrackingFileL'] = workload['outputTrackingFileH'].name +'live'       
+        workload['outputTrackingFileL'] = workload['outputTrackingFileH'].name +'live'      
     except Exception as e:
         print('startFIOprocess error: {0}'.format(e))
 
 
 def updateStatus(workload):#,df): 
-    line = workload['process'].stdout.readline() 
-    
-    if line[0:4] == 'Jobs':
-        workload.update(get_value(line))
-        percent = float(workload['percentComplete'])
-        workload['status'] = progBar(percent)+' {0:3}%'.format(int(percent)) 
-        iops = int(workload['iops'])
-        mbps = int(float(workload['mbps']))
-        timestamp = datetime.datetime.isoformat(datetime.datetime.now())
-        data = '{timestamp},{iops},{mbps}\n'.format(
-                timestamp=timestamp,
-                iops = str(int(float('{:.{p}g}'.format(iops,p=3)))),
-                mbps = str(int(float('{:.{p}g}'.format(mbps,p=3))))
-                ) #3 significant figures
-        workload['outputTrackingFileH'].write(data)
-        open(workload['outputTrackingFileL'],'w').write(data)
-            
-        #df.at[workload['filename'],'status'] = workload['status']
-    if line == '' and workload['process'].poll() is not None: 
-        workload['percentComplete'] = 100   
-        workload['outputTrackingFileH'].close()
-
+    while 1:
+        line = workload['process'].stdout.readline() 
+        if line[0:4] == 'Jobs':
+            workload.update(get_value(line))
+            percent = float(workload['percentComplete'])
+            workload['status'] = progBar(percent)+' {0:3}%'.format(int(percent)) 
+            iops = int(workload['iops'])
+            mbps = int(float(workload['mbps']))
+            timestamp = datetime.datetime.isoformat(datetime.datetime.now())
+            data = ('{timestamp},{iops},{mbps}\n'.format(
+                    timestamp=timestamp,
+                    iops = str(int(float('{:.{p}g}'.format(iops,p=3)))),
+                    mbps = str(int(float('{:.{p}g}'.format(mbps,p=3))))
+                    )) #3 significant figures
+            workload['outputTrackingFileH'].write(data)
+            open(workload['outputTrackingFileL'],'w').write(data)
+            #df.at[workload['filename'],'status'] = workload['status']
+        if line == '' and workload['process'].poll() is not None: 
+            workload['percentComplete'] = 100   
+            workload['outputTrackingFileH'].close()
+            break
 
 
 def runFIO(workloadData,liveDisplay):
     """
     Find files matching pattern WL*.fio in ./currentWL
     
-    Inputs: 
+    Inputs:     
         workloadData (list): of dict describing workload parameters
-        liveDisplay (list): IOPS: graph for speed gauge display, Qos: graph for QoS latency
-        
+    
     Outputs:
         Print queued workload details and running workload status/progress/performance
     
@@ -189,11 +189,14 @@ def runFIO(workloadData,liveDisplay):
          Store in workloads object
 
     """ 
-    QoS = 'QoS' in liveDisplay
     df = FIOgenesis.createWorkloadDF(workloadData,2)
+    QoS = 'QoS' in liveDisplay
+    
     for wlDict in workloadData:
         print ('{0}{1}'.format('Starting Workload:',wlDict['filename']))
         startFIOprocess(wlDict,QoS)
+        t = Thread(target=updateStatus, args=(wlDict,))
+        t.start()
         
     if liveDisplay:
         fioLiveGraph.createHTMLpage(workloadData,QoS)
@@ -201,26 +204,17 @@ def runFIO(workloadData,liveDisplay):
             webbrowser.get('firefox').open('fioLiveGraph.html',new=0)
         except:
             webbrowser.open('fioLiveGraph.html',new=0)
-
-    print('\n'*(len(workloadData)+1))       
+    
+    print('\n'*(len(workloadData)+3))       
     resetCaret = len(workloadData)+3
-    while workloadData:
-        for wl in workloadData:
-            if wl['percentComplete'] != 100:
-                updateStatus(wl)
-                df.at[wl['filename'],'iops'] = wl['iops']
-                df.at[wl['filename'],'mbps'] = wl['mbps']
-                df.at[wl['filename'],'eta'] = wl['eta']
-                df.at[wl['filename'],'status'] = wl['status']
-            else:
-                workloadData.remove(wl)
-            print('\x1b[A'*(resetCaret)+'\r') #move caret back to beginning of table
-            print(df.set_index('file')) #reprint workload monitor table
-        
-        #print('Update Cycle time: {0}'.format(datetime.datetime.now()-start))                
-        
-    #print('\x1b[A'*(len(workloadData)+3)+'\r') #move caret back to beginning of table
-    #print(FIOgenesis.createWorkloadDF(workloadData,2)) #reprint workload monitor table
+    while any(wl['percentComplete'] != 100 for wl in workloadData):
+        df = FIOgenesis.createWorkloadDF(workloadData,2)
+        print('\x1b[A'*(resetCaret)+'\r') #move caret back to beginning of table
+        print(df.set_index('file')) #reprint workload monitor table
+    #Update and print completed table
+    df = FIOgenesis.createWorkloadDF(workloadData,2)
+    print('\x1b[A'*(resetCaret)+'\r') #move caret back to beginning of table
+    print(df.set_index('file')) #reprint workload monitor table    
     
     print('FIO-run Complete')        
     
