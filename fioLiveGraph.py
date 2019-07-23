@@ -179,7 +179,7 @@ function (chart) {{
 """.format(resultFile=resultFile,workloadTitle=workloadTitle,ID=containerID)
 
 
-def createHTMLpage(displayWL, title='SK hynix SSD benchmark demo workloads'):
+def createHTMLpage(displayWL, QoS, title='SK hynix SSD benchmark demo workloads'):
     """
     Automatically generate JS-based webpage for displaying benchmarking live results from fio running workloads
     

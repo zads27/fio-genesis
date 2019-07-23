@@ -5,8 +5,14 @@ Base program for interactive fio workload generator/process monitor for running 
 To do:
 Use io.StringIO object for updating each process dynamically on line write instead of after all fio threads have updated values 
 Check targets for partition map and warn for write operations
-Add disk drive descriptions to drive list
+
+Fix QoS:
+Fix parsing of live performance data
+Add bargraph highcharts for QoS 
+Change to one graph per line in QoS case?
+Add percentage silos for 9's cases: 99.99,etc
 """
+
 #Standard Libs
 import subprocess,sys,os,copy,hashlib,shutil,glob,webbrowser,json
 
@@ -23,15 +29,6 @@ from PyInquirer import style_from_dict, Token, prompt, Separator
 import fioGenerator,fioRunner
 
 debug = 0
-
-'''
-To do:
-if nvme:
-a = subprocess.Popen('sudo nvme list',stdout=subprocess.PIPE,shell=1)
-b = a.stdout.readlines() 
-b = [x.decode('utf-8').split() for x in b]
-
-'''
 
 def import_install(package):
     try:
@@ -407,11 +404,12 @@ def main():
                     shutil.rmtree('results',ignore_errors=True)
                     os.mkdir('results')
                     live = [{
-                        'type': 'confirm',
+                        'type': 'checkbox',
                         'message': 'Would you like to plot and display live Benchmark Data?:',
                         'name': 'liveDisplay',
-                        'default': False
-                        }]
+                        'choices': [{'name':'IOPS','checked':False},
+                                    {'name':'QoS','checked':False, 'disabled':'Not yet implemented'}]
+                         }]
                     fioRunner.runFIO(workloadData,prompt(live,style=fioGenerator.style)['liveDisplay'])
                     question = [{
                         'type': 'confirm',

@@ -103,7 +103,7 @@ def progBar(percentage):
     return progress
     
     
-def startFIOprocess(workload):                  
+def startFIOprocess(workload, QoS):                  
     """
     Runs fio executable with JSON fio output for WL*.fio to WL*.log 
     
@@ -117,13 +117,18 @@ def startFIOprocess(workload):
         stdout/stderr are routed to Popen object PIPE   
     """        
     try: 
-        fioThread = subprocess.Popen(
-            ['sudo', 
+        fio_command = ['sudo', 
                 'fio',
                 workload['filename'],
                 '--eta=always',
                 '--output=results/{}'.format(workload['filename'].split('.')[0]+'.log'),
-                '--output-format=json'],
+                '--output-format=json'
+                ]
+        if QoS:
+            fio_command.append('--status-interval=1')
+            fio_command.append('--percentile_list=1:10:50:90:95:99:99.9:99.99:99.999:99.9999:99.99999:99.999999')
+        fioThread = subprocess.Popen(
+            fio_command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             universal_newlines=True,
@@ -175,7 +180,8 @@ def runFIO(workloadData,liveDisplay):
     
     Inputs: 
         workloadData (list): of dict describing workload parameters
-    
+        liveDisplay (list): IOPS: graph for speed gauge display, Qos: graph for QoS latency
+        
     Outputs:
         Print queued workload details and running workload status/progress/performance
     
@@ -183,13 +189,14 @@ def runFIO(workloadData,liveDisplay):
          Store in workloads object
 
     """ 
+    QoS = 'QoS' in liveDisplay
     df = FIOgenesis.createWorkloadDF(workloadData,2)
     for wlDict in workloadData:
         print ('{0}{1}'.format('Starting Workload:',wlDict['filename']))
-        startFIOprocess(wlDict)
+        startFIOprocess(wlDict,QoS)
         
     if liveDisplay:
-        fioLiveGraph.createHTMLpage(workloadData)
+        fioLiveGraph.createHTMLpage(workloadData,QoS)
         try: 
             webbrowser.get('firefox').open('fioLiveGraph.html',new=0)
         except:
