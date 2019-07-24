@@ -2,8 +2,8 @@
 
 #Standard Libs
 import subprocess,os,re,datetime,webbrowser
-from multiprocessing import Process, Array, Manager
 from threading import Thread
+import json
 
 #Installed Libs
 from pprint import pprint
@@ -47,7 +47,7 @@ def get_value(line):
     result = {'percentComplete':0,
                 'iops':'0',
                 'mbps':'0',
-                'eta':'Unknown'}
+                'eta':'-'}
     pattern = r'(\[[^\]]+\])'    
     m = re.findall(pattern,line)
     if m:
@@ -57,7 +57,7 @@ def get_value(line):
         #array of 1 or more throughput numbers suffixed with M or K
         result['iops'] = '{0:2d}'.format(int(sum([to_number(x) for x in re.findall('[0-9.]+[Kk]*',m[2])])))
         #array of 1 or more iops numbers (may be suffixed with k)
-        result['eta'] = re.search('\[eta\s+([0-9hms:]+)',m[3]).group(1)
+        result['eta'] = re.search('\[eta\s+([0-9dhms:]+)',m[3]).group(1)
     return result  
                 
 '''
@@ -119,16 +119,18 @@ def startFIOprocess(workload, QoS):
         stdout/stderr are routed to Popen object PIPE   
     """        
     try: 
-        fio_command = ['sudo', 
-                'fio',
-                workload['filename'],
-                '--eta=always',
-                '--output=results/{}'.format(workload['filename'].split('.')[0]+'.log'),
-                '--output-format=json'
-                ]
+        fio_command = ['sudo','fio',workload['filename']]
         if QoS:
             fio_command.append('--status-interval=1')
+            fio_command.append('--output-format=json')
             fio_command.append('--percentile_list=1:10:50:90:95:99:99.9:99.99:99.999:99.9999:99.99999:99.999999')
+        else:
+            fio_command.append('--output=results/{}'.format(workload['filename'].split('.')[0]+'.log'))
+            fio_command.append('--eta=always')
+            fio_command.append('--eta-interval=250ms')
+            fio_command.append('--status-interval=1')
+            fio_command.append('--output-format=normal')
+                                    
         fioThread = subprocess.Popen(
             fio_command,
             stdout=subprocess.PIPE,
@@ -143,7 +145,6 @@ def startFIOprocess(workload, QoS):
                         'Rd/Wr= {}'.format(workload['readPercent'])
                         ])
         workload['targetDescription'] = 'SK hynix drive'
-        workload['dataType'] = 'IOPS'
         workload['outputTrackingFileH'] = open('results/{0}.dat'.format(workload['filename'].split('.')[0]),'w')
         workload['outputTrackingFileH'].write('timestamp,iops,mbps\n')  
         workload['outputTrackingFileL'] = workload['outputTrackingFileH'].name +'live'      
@@ -151,27 +152,54 @@ def startFIOprocess(workload, QoS):
         print('startFIOprocess error: {0}'.format(e))
 
 
-def updateStatus(workload):#,df): 
-    while 1:
-        line = workload['process'].stdout.readline() 
-        if line[0:4] == 'Jobs':
-            workload.update(get_value(line))
-            percent = float(workload['percentComplete'])
-            workload['status'] = progBar(percent)+' {0:3}%'.format(int(percent)) 
-            iops = int(workload['iops'])
-            mbps = int(float(workload['mbps']))
-            timestamp = datetime.datetime.isoformat(datetime.datetime.now())
-            data = ('{timestamp},{iops},{mbps}\n'.format(
-                    timestamp=timestamp,
-                    iops = str(int(float('{:.{p}g}'.format(iops,p=3)))),
-                    mbps = str(int(float('{:.{p}g}'.format(mbps,p=3))))
-                    )) #3 significant figures
-            workload['outputTrackingFileH'].write(data)
-            open(workload['outputTrackingFileL'],'w').write(data)
-            #df.at[workload['filename'],'status'] = workload['status']
+def updateStatus(workload,QoS): 
+    jsonBuf = ''
+    while True:    
+        line = workload['process'].stdout.readline()
+        if QoS:
+            if (line == '{\n') or jsonBuf:
+                jsonBuf += line
+            if  jsonBuf[-3:] == '\n}\n':
+                jsonFrame = json.loads(jsonBuf) 
+                eta = jsonFrame['jobs'][0]['eta']
+                workload['eta'] = eta if eta < 1000000 else '0' 
+                #create fake percentage remaining? 
+                workload['status'] = 'Runnning'
+                iops = int(jsonFrame['jobs'][0]['read']['iops']+jsonFrame['jobs'][0]['write']['iops'])
+                #write to bandwidth log file, live output file, status panel (workload)
+                workload['iops'] = iops 
+                mbps = (jsonFrame['jobs'][0]['read']['bw']+jsonFrame['jobs'][0]['write']['bw'])/1024
+                workload['mbps'] = str(float('{:.{p}g}'.format(mbps,p=3)))
+                timestamp = datetime.datetime.isoformat(datetime.datetime.now()) 
+                data = ('{timestamp},{iops},{mbps}\n'.format(
+                        timestamp=timestamp,
+                        iops = str(int(float('{:.{p}g}'.format(iops,p=3)))),
+                        mbps=mbps))# = str(int(float('{:.{p}g}'.format(mbps,p=3))))
+                        #3 significant figures
+                workload['outputTrackingFileH'].write(data)
+                open(workload['outputTrackingFileL'],'w').write(data)
+                jsonBuf = ''           
+        else:       
+            if line[0:4] == 'Jobs':
+                workload.update(get_value(line))
+                percent = float(workload['percentComplete'])
+                workload['status'] = progBar(percent)+' {0:3}%'.format(int(percent)) 
+                iops = int(workload['iops'])
+                mbps = int(float(workload['mbps']))
+                timestamp = datetime.datetime.isoformat(datetime.datetime.now())
+                data = ('{timestamp},{iops},{mbps}\n'.format(
+                        timestamp=timestamp,
+                        iops = str(int(float('{:.{p}g}'.format(iops,p=3)))),
+                        mbps = str(int(float('{:.{p}g}'.format(mbps,p=3))))
+                        )) #3 significant figures
+                workload['outputTrackingFileH'].write(data)
+                open(workload['outputTrackingFileL'],'w').write(data)
+                #df.at[workload['filename'],'status'] = workload['status']
         if line == '' and workload['process'].poll() is not None: 
             workload['percentComplete'] = 100   
             workload['outputTrackingFileH'].close()
+            if QoS: 
+                workload['status'] = 'Complete'
             break
 
 
@@ -195,7 +223,7 @@ def runFIO(workloadData,liveDisplay):
     for wlDict in workloadData:
         print ('{0}{1}'.format('Starting Workload:',wlDict['filename']))
         startFIOprocess(wlDict,QoS)
-        t = Thread(target=updateStatus, args=(wlDict,))
+        t = Thread(target=updateStatus, args=(wlDict,QoS))
         t.start()
         
     if liveDisplay:

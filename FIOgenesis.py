@@ -283,7 +283,7 @@ def create_workload(targets):
         os.remove('WL_temp.fio')   
     
     
-def plotOutput():    
+def plotOutput(liveDisplay):    
     iopsdata,mbpsdata = [],[]
     
     for filename in glob.glob('results/*.dat'):
@@ -300,7 +300,7 @@ def plotOutput():
                        )
         iopsdata.append(iopsTrace)
         mbpsdata.append(mbpsTrace)
-    layout = go.Layout(title='Workload Performance chart output',
+    layout = go.Layout(title='Running Average Performance chart' if 'QoS' in liveDisplay else 'Workload Performance chart output',
                        paper_bgcolor='rgb(230, 230, 230)',
                        plot_bgcolor='rgb(200 , 200 , 200)')    
     fig = tools.make_subplots(rows=2,cols=1,shared_xaxes=True,vertical_spacing=0.02,print_grid=False)
@@ -403,13 +403,14 @@ def main():
                     shutil.rmtree('results',ignore_errors=True)
                     os.mkdir('results')
                     live = [{
-                        'type': 'checkbox',
-                        'message': 'Would you like to plot and display live Benchmark Data?:',
-                        'name': 'liveDisplay',
-                        'choices': [{'name':'IOPS','checked':False},
-                                    {'name':'QoS','checked':False}]
-                         }]
-                    fioRunner.runFIO(workloadData,prompt(live,style=fioGenerator.style)['liveDisplay'])
+                            'type': 'checkbox',
+                            'message': 'Would you like to plot and display live Benchmark Data?:',
+                            'name': 'liveDisplay',
+                            'choices': [{'name':'IOPS','checked':False},
+                                        {'name':'QoS','checked':False,}]#, 'disabled':'Pending workaround?'}]
+                            }]
+                    liveDisplay = prompt(live,style=fioGenerator.style)['liveDisplay']
+                    fioRunner.runFIO(workloadData,liveDisplay)
                     question = [{
                         'type': 'confirm',
                         'message': 'Would you like to plot and display performance charts?:',
@@ -417,7 +418,7 @@ def main():
                         'default': True
                         }]   
                     if prompt(question,style=fioGenerator.style)['plotResults']:
-                        plotOutput()
+                        plotOutput(liveDisplay)
             #except: 
                 pass    
         elif action == 'Exit FIOgenesis':
