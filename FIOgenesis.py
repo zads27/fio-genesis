@@ -127,12 +127,15 @@ def createWorkloadDF(workloadData,dfType):
         else:
             x['file'] = x['filename']
     df = pandas.DataFrame.from_dict(workloadData)
-    #pandas.set_option('max_colwidth',40)
+    
     if dfType == 1: #clip some output for screen display
         df = df[['file','target','bs','seqRand','readPercent','size','numJobs','iodepth','size','time']]
     elif dfType == 2: #clip some output for process tracking display
+        widths = {'iops':6,'mbps':5,'eta':15,'status':30}
+        for label in widths:
+            df.at[0,label] = df.iloc[0][label].rjust(widths[label]) 
         df = df[['filename','file','target','bs','seqRand','readPercent','iops','mbps','eta','status']].set_index('filename')
-    #elif dfType == 0, no clipping of df
+
     return df
    
     

@@ -59,26 +59,6 @@ def get_value(line):
         #array of 1 or more iops numbers (may be suffixed with k)
         result['eta'] = re.search('\[eta\s+([0-9dhms:]+)',m[3]).group(1)
     return result  
-                
-'''
-    pattern = r'\[r=([^,]+),w=([^\]]+)\s+(?i)IOPS\]'
-    m = re.search(pattern, line)
-    if m:
-        r, w = to_number(m.group(1)), to_number(m.group(2))
-        result['iops'] = '{0:2f}'.format(r + w)
-    
-    pattern = r'\[([0-9]+[.0-9]+)%.*\[eta\s+([0-9hms:]+)'
-    m = re.search(pattern, line)
-    if m:
-        result['percentComplete'], result['eta'] = m.group(1), m.group(2)
-    
-    pattern = r'\[r=([^,]+),w=([^\]]+)\]'
-    m = re.search(pattern, line)
-    if m:
-        r, w = to_number(m.group(1)), to_number(m.group(2))
-        result['mbps'] = '{0:.1f}'.format(r + w)
-'''
-    
     
 def progBar(percentage):
     """
@@ -127,8 +107,7 @@ def startFIOprocess(workload, QoS):
         else:
             fio_command.append('--output=results/{}'.format(workload['filename'].split('.')[0]+'.log'))
             fio_command.append('--eta=always')
-            fio_command.append('--eta-interval=250ms')
-            fio_command.append('--status-interval=1')
+            fio_command.append('--eta-newline=250ms')
             fio_command.append('--output-format=normal')
                                     
         fioThread = subprocess.Popen(
@@ -162,7 +141,8 @@ def updateStatus(workload,QoS):
             if  jsonBuf[-3:] == '\n}\n':
                 jsonFrame = json.loads(jsonBuf) 
                 eta = jsonFrame['jobs'][0]['eta']
-                workload['eta'] = eta if eta < 1000000 else '0' 
+                workload['eta'] = eta if eta < 1000000 else '0'
+                workload['eta'] = workload['eta']
                 #create fake percentage remaining? 
                 workload['status'] = 'Runnning'
                 iops = int(jsonFrame['jobs'][0]['read']['iops']+jsonFrame['jobs'][0]['write']['iops'])
@@ -200,6 +180,8 @@ def updateStatus(workload,QoS):
             workload['outputTrackingFileH'].close()
             if QoS: 
                 workload['status'] = 'Complete'
+            if workload['process'].poll() != 0:
+                workload['status'] = 'Error: {}'.format(workload['process'].returncode)
             break
 
 
@@ -217,35 +199,43 @@ def runFIO(workloadData,liveDisplay):
          Store in workloads object
 
     """ 
-    df = FIOgenesis.createWorkloadDF(workloadData,2)
-    QoS = 'QoS' in liveDisplay
-    
-    for wlDict in workloadData:
-        print ('{0}{1}'.format('Starting Workload:',wlDict['filename']))
-        startFIOprocess(wlDict,QoS)
-        t = Thread(target=updateStatus, args=(wlDict,QoS))
-        t.start()
-        
-    if liveDisplay:
-        fioLiveGraph.createHTMLpage(workloadData,QoS)
-        try: 
-            webbrowser.get('firefox').open('fioLiveGraph.html',new=0)
-        except:
-            webbrowser.open('fioLiveGraph.html',new=0)
-    
-    print('\n'*(len(workloadData)+3))       
-    resetCaret = len(workloadData)+3
-    while any(wl['percentComplete'] != 100 for wl in workloadData):
+    try:
+        df = FIOgenesis.createWorkloadDF(workloadData,2)
+        QoS = 'QoS' in liveDisplay
+
+        for wlDict in workloadData:
+            print ('{0}{1}'.format('Starting Workload:',wlDict['filename']))
+            startFIOprocess(wlDict,QoS)
+            t = Thread(target=updateStatus, args=(wlDict,QoS))
+            t.start()
+
+        if liveDisplay:
+            fioLiveGraph.createHTMLpage(workloadData,QoS)
+            try: 
+                webbrowser.get('firefox').open('fioLiveGraph.html',new=0)
+            except:
+                webbrowser.open('fioLiveGraph.html',new=0)
+
+        print('\n'*(len(workloadData)+3))       
+        resetCaret = len(workloadData)+3
+        while any(wl['percentComplete'] != 100 for wl in workloadData):
+            df = FIOgenesis.createWorkloadDF(workloadData,2)
+            print('\x1b[A'*(resetCaret)+'\r') #move caret back to beginning of table
+            print(df.set_index('file')) #reprint workload monitor table
+        #Update and print completed table
         df = FIOgenesis.createWorkloadDF(workloadData,2)
         print('\x1b[A'*(resetCaret)+'\r') #move caret back to beginning of table
-        print(df.set_index('file')) #reprint workload monitor table
-    #Update and print completed table
-    df = FIOgenesis.createWorkloadDF(workloadData,2)
-    print('\x1b[A'*(resetCaret)+'\r') #move caret back to beginning of table
-    print(df.set_index('file')) #reprint workload monitor table    
-    
-    print('FIO-run Complete')        
-    
+        print(df.set_index('file')) #reprint workload monitor table    
 
+        for workload in workloadData:
+            workload['process'] = workload['process'].poll()
+            if workload['process'] != 0:
+                print('\nFIO Error:')
+                print(open('results/{}'.format(workload['filename'].split('.')[0]+'.log'),'r').read())
+
+        print('FIO-run Complete')
+        
+    except KeyboardInterrupt:
+        print('\nFIO-run Terminated') 
        
    
