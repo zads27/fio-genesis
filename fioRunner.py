@@ -37,13 +37,18 @@ def to_number(mstring):
 
    
 def get_value(line):
-    """Parse continuous fio output and get requested value"""
+    """
+    # Input: String passed from FIO stdout
+    #
+    # Output: parsed dict of performance/eta/percentage values 
+    #
     # fio 2.16-1 format:
     #   Jobs: 1 (f=1): [R(1)] [37.5% done] [727.0MB/0KB/0KB /s] [727/0/0 iops] [eta 00m:10s]
     # fio ?? format
     #   jobs: 1 (f=1): [R(1)][1.2%][r=1733MiB/s,w=0KiB/s][r=13.9k,w=0 IOPS][eta 59m:17s]
     # fio 3.12 format:
     #   Jobs: 1 (f=1): [R(1)][40.0%][r=409MiB/s][r=409 IOPS][eta 00m:09s]
+    """
     result = {'percentComplete':0,
                 'iops':'0',
                 'mbps':'0',
@@ -71,16 +76,16 @@ def progBar(percentage):
         String of length 'barLength' (hardcoded) shaded according to progress percentage
     """
     barLength = 30
-    progress = '\u2588'*int(percentage*barLength/100)
+    progress = u'\u2588'*int(percentage*barLength/100)
     segmentSpan = 100/barLength
     segmentRemainder = percentage % barLength
     if segmentRemainder:
         if segmentRemainder < (segmentSpan/3):
-            progress += '\u2591' #light shade
+            progress += u'\u2591' #light shade
         elif segmentRemainder < (2*segmentSpan/3):
-            progress += '\u2592' #medium shade
+            progress += u'\u2592' #medium shade
         elif percentage < 100:
-            progress += '\u2593' #dark shade
+            progress += u'\u2593' #dark shade
     progress += '-'*(barLength-len(progress))
     return progress
     
@@ -142,13 +147,12 @@ def updateStatus(workload,QoS):
                 jsonFrame = json.loads(jsonBuf) 
                 
                 eta = jsonFrame['jobs'][0]['eta']
-                workload['eta'] = eta if eta < 1000000 else '0'
-                workload['eta'] = workload['eta']
+                workload['eta'] = str(datetime.timedelta(seconds=eta)) if eta < 1000000 else '0'
                 #create fake percentage remaining? 
                 workload['status'] = 'Runnning'
                 iops = int(jsonFrame['jobs'][0]['read']['iops']+jsonFrame['jobs'][0]['write']['iops'])
                 #write to bandwidth log file, live output file, status panel (workload)
-                workload['iops'] = iops 
+                workload['iops'] = str(iops) 
                 mbps = (jsonFrame['jobs'][0]['read']['bw']+jsonFrame['jobs'][0]['write']['bw'])/1024
                 workload['mbps'] = str(float('{:.{p}g}'.format(mbps,p=3)))
                 if 'clat_ns' in jsonFrame['jobs'][0]['read']:
@@ -209,7 +213,7 @@ def runFIO(workloadData,liveDisplay):
          Store in workloads object
 
     """ 
-    try:
+    if 1:#try:
         df = FIOgenesis.createWorkloadDF(workloadData,2)
         QoS = 'QoS' in liveDisplay
         updaters = []
@@ -246,7 +250,7 @@ def runFIO(workloadData,liveDisplay):
 
         print('FIO-run Complete')
         
-    except KeyboardInterrupt:
+    #except KeyboardInterrupt:
         print('\nFIO-run Terminated') 
        
    

@@ -7,10 +7,7 @@ Use io.StringIO object for updating each process dynamically on line write inste
 Check targets for partition map and warn for write operations
 
 Fix QoS:
-Fix parsing of live performance data
 Add bargraph highcharts for QoS 
-Change to one graph per line in QoS case?
-Add percentage silos for 9's cases: 99.99,etc
 """
 
 #Standard Libs
@@ -24,6 +21,8 @@ import plotly.graph_objs as go
 from PyInquirer import style_from_dict, Token, prompt, Separator
 'lsscsi'
 'nvme-cli'
+if sys.version_info[0] < 3:
+    input = raw_input
 
 #Custom Libs
 import fioGenerator,fioRunner
@@ -85,9 +84,7 @@ def find_drives(display):
             for drive in nvme_dev['Devices']:           
                 block_dev.loc[block_dev['DevicePath']==drive['DevicePath'],'Firmware'] = drive['Firmware']
         except:
-            pass
-        #block_dev: {Target:'/dev/sda', Cap:'Intel SSDSC2BB96', '0101', '894G'}
-        
+            pass   
     else: #windows/testmode
         block_dev = subprocess.check_output('wmic diskdrive get name,model')
         block_dev = [x.decode('utf-8') for x in block_dev.splitlines() if x]
@@ -121,7 +118,7 @@ def createWorkloadDF(workloadData,dfType):
     elif dfType == 2: #clip some output for process tracking display
         widths = {'iops':6,'mbps':5,'eta':15,'status':35}
         for label in widths:
-            df.at[0,label] = str(df.iloc[0][label]).rjust(widths[label]) 
+            df.at[0,label] = str(df.iloc[0][label]).rjust(widths[label])    
         df = df[['filename','file','target','bs','seqRand','readPercent','iops','mbps','eta','status']].set_index('filename')
 
     return df
@@ -147,7 +144,7 @@ def importExtractWorkloadData():
                 {filename2, bs2, ...}
             ]
     """
-    files = os.listdir()
+    files = os.listdir('.')
     workloadFiles = []
     for filename in files:
         if filename.endswith('.fio'):
@@ -183,13 +180,11 @@ def importExtractWorkloadData():
                 time = [x.split('=')[1].strip() for x in workloadFileLines if x.startswith('runtime')][0]
             else: 
                 time = 0         
-            if str(target) not in available_targets:
-                print ('*** Warning: Target drive: {0} is not detected on the system! ***'.format(target))
             fileChk = fileChecksum(workload_file)
             if fileChk in dupCheck: 
                 print ('*** Warning: These are duplicate workloads!!! ***\n',  
-                        '\u250F\u2501\u26A0 {0}\n'.format(workload_file),  
-                        '\u2517\u2501\u26A0 {0}'.format(dupCheck[fileChecksum(workload_file)]))
+                        u'\u250F\u2501\u26A0 {0}\n'.format(workload_file),  
+                        u'\u2517\u2501\u26A0 {0}'.format(dupCheck[fileChecksum(workload_file)]))
             else : 
                 dupCheck[fileChecksum(workload_file)] = workload_file
             if len(workload_file) > 20:
@@ -329,7 +324,7 @@ def main():
          Store in workloads object
 
     """    
-    os.chdir(path='./currentWL')
+    os.chdir('currentWL')
     
     while True: 
         clearScreen()
@@ -367,10 +362,14 @@ def main():
        
         elif action == 'Import a workload':
             try: 
+                startdir = os.getcwd()
                 for files in fioGenerator.importFIO()['selection']:
-                    shutil.copy(files,os.getcwd())
+                    shutil.copy(files,startdir)
             except:
-                pass 
+                pass
+            finally: 
+                os.chdir(startdir)
+
                 
         elif action == 'Delete a workload':
             try: 
@@ -406,28 +405,28 @@ def main():
                             'name': 'displayTypes',
                             'choices': [{'name':'MBPS','checked':False},
                                         {'name':'IOPS','checked':False},
-                                        {'name':'QoS','checked':False,
-                                         'description':'Note that this will cause IOPS/MBPS to be running average'}]
+                                        {'name':'QoS','checked':False}]
                         },
                         {
                             'type': 'checkbox',
-                            'message': 'Select files for {}:'.format('MBPS'),
+                            'message': 'Select workloads for {} live output:'.format('MBPS'),
                             'name': 'MBPS',
                             'choices': [{'name':x['filename'],'checked':False} for x in workloadData],
                             'when': lambda answers: 'MBPS' in answers['displayTypes']
                         },
                         {
                             'type': 'checkbox',
-                            'message': 'Select files for {}:'.format('IOPS'),
+                            'message': 'Select workloads for {} live output:'.format('IOPS'),
                             'name': 'IOPS',
                             'choices': [{'name':x['filename'],'checked':False} for x in workloadData],
                             'when': lambda answers: 'IOPS' in answers['displayTypes']
                         },
                         {
                             'type': 'checkbox',
-                            'message': 'Select files for {}:'.format('QoS'),
+                            'message': 'Select workloads for {} live output:'.format('QoS'),
                             'name': 'QoS',
-                            'choices': [{'name':x['filename'],'checked':False} for x in workloadData],
+                            'choices': [Separator('Note that MBPS and IOPS will be running averages when QoS is selected')] +                 
+                                        [{'name':x['filename'],'checked':False} for x in workloadData],
                             'when': lambda answers: 'QoS' in answers['displayTypes']
                         }]
                     graphSelections = prompt(liveOutputSelect,style=fioGenerator.style)
