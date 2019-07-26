@@ -1,7 +1,7 @@
 #Standard Libs 
 import platform,subprocess
 
-def htmlMain(title,workloads): 
+def htmlMain(title,workloadsContainerHTML): 
     systemName = ' '.join(platform.linux_distribution()) 
     fioVers = subprocess.check_output('fio -v',shell=1).decode('utf-8').split('-')[1]    
     data = """  
@@ -33,46 +33,69 @@ function checkTime(i) {{
     <h2 style="text-align:center">
     {graphTitle}
     </h2>
-{workloads} 
+{workloadsContainerHTML} 
 <div style="text-align:center">
     <div style="display:inline;">{systemName} / FIO v{fio} / </div>
     <!-- <div id="clock" style="display:inline;"></div> -->
 </div>
 </body>
-""".format(graphTitle=title,workloads=workloads,systemName=systemName,fio=fioVers)
+""".format(graphTitle=title,workloadsContainerHTML=workloadsContainerHTML,systemName=systemName,fio=fioVers)
     return data
-
-
-def generateContainers(displayWL):
-    pos = 'left' 
-    workloadHTML = ''
-    for ID in range(len(displayWL)):
-        workloadHTML += graphContainer(pos,'{}'.format(ID))
-        pos = ('right' if (pos == 'left') else 'left')
-    return (workloadHTML)
         
         
-def graphContainer(position,containerID): 
-    container = """<div id="u{ID}" style="display:inline; float:{position}; width:48%">
-    <div id="u{ID}container" style="width: 400px; height: 350px; margin: 0 auto"></div>
+def generateWorkloadContainers(workloadData): 
+    ID = 0
+    workloadsContainerHTML = ''
+    for workload in workloadData: 
+        graphsHTML = ''
+        for graph in workload['liveGraphs']:
+            graphsHTML += """
+<td>
+<div id="u{ID}container" style="max-width:100%; height: 100%; margin: 0 auto">
 </div>
-""".format(position=position,ID=containerID) 
-    return container
+<td>
+""".format(ID=ID)
+            workload['liveGraphs'][graph] = ID
+            ID += 1
+        if graphsHTML: 
+            workloadsContainerHTML += """
+<table style="width:100%">
+<thead>
+<tr>
+<td style="text-align:right; font-size:20px; width:33%">{File}</td> 
+<td style="text-align:left; font-size:12px; width:33%">{Title}</td>
+<td style="width:33%"> </td>
+</tr>
+</thead>
+<tbody>
+<tr>
+        {graphsHTML}    
+</tr>
+</tbody>
+</table>
+""".format(graphsHTML=graphsHTML,Title=workload['wlDescription'],File=workload['filename']) 
+    return workloadsContainerHTML
 
 
-def generateGraph(resultFile,workloadTitle,containerID):
-    return """
+def generateGraphJS(resultFile,workloadTitle,liveGraphs):
+    graphJS = ''
+    for graphType in liveGraphs:
+        containerID = liveGraphs[graphType]
+        dataloc = {'IOPS':1,'MBPS':2}
+        if graphType in dataloc:    
+            perf = dataloc[graphType]
+            graphJS += """
 <script type="text/javascript">
 function loadperf{ID}(callback) {{   
 
     var xobj = new XMLHttpRequest();
         xobj.overrideMimeType("text/csv");
-    xobj.open('GET', '{resultFile}', false); // Replace 'my_data' with the path to your file
+    xobj.open('GET', '{File}', false); // Replace 'my_data' with the path to your file
     xobj.onreadystatechange = function () {{
           //if (xobj.readyState == 4 && xobj.status == 200) {{
             // Required use of an anonymous callback as .open will NOT return a value but simply returns undefined in asynchronous mode
             // console.log(xobj.responseText);
-            callback(xobj.responseText.split(',')[1]/1000);
+            callback(xobj.responseText.split(',')[{perf}]/1000);
           //}}
     }};
     xobj.send();  
@@ -82,14 +105,6 @@ Highcharts.chart('u{ID}container', {{
 
     chart: {{
         type: 'solidgauge'
-    }},
-
-    title: {{
-        text: '{resultFile}'
-    }},
-
-    subtitle: {{
-        text: '{workloadTitle}'
     }},
 
     pane: {{
@@ -104,6 +119,10 @@ Highcharts.chart('u{ID}container', {{
         }}
     }},
 
+    title: {{
+        text: undefined
+    }},
+
     tooltip: {{
         enabled: false
     }},
@@ -115,8 +134,8 @@ Highcharts.chart('u{ID}container', {{
     // the value axis
     yAxis: {{
         min: 0,
-        max: 120,
-        title: {{ text: 'KIOPS' }},
+        max: 200,
+        title: {{ text: '{units}' }},
         stops: [
             [0.2, '#DF5353'], // red
             [0.5, '#DDDF0D'], // yellow
@@ -147,15 +166,15 @@ Highcharts.chart('u{ID}container', {{
     }},
 
     series: [{{
-        name: 'KIOPS',
+        name: '{units}',
         data: [90],
         dataLabels: {{
             format: '<div style="text-align:center"><span style="font-size:40px;color:' +
                 ((Highcharts.theme && Highcharts.theme.contrastTextColor) || 'black') + '">{{y}}</span><br/>' +
-                   '<span style="font-size:24px;color:#999999">KIOPS</span></div>'
+                   '<span style="font-size:24px;color:#999999">{units}</span></div>'
         }},
         tooltip: {{
-            valueSuffix: 'KIOPS'
+            valueSuffix: '{units}'
         }}
     }}]
 
@@ -176,10 +195,11 @@ function (chart) {{
     }}
 }});
 </script>
-""".format(resultFile=resultFile,workloadTitle=workloadTitle,ID=containerID)
+""".format(File=resultFile,ID=containerID,perf=perf,units=('KIOPS' if graphType == 'IOPS' else 'MBPS'))
+    return graphJS
 
 
-def createHTMLpage(displayWL, QoS, title='SK hynix SSD benchmark demo workloads'):
+def createHTMLpage(outputName, workloadData, liveDisplay, title='SK hynix SSD benchmark live demo workloads'):
     """
     Automatically generate JS-based webpage for displaying benchmarking live results from fio running workloads
     
@@ -190,39 +210,18 @@ def createHTMLpage(displayWL, QoS, title='SK hynix SSD benchmark demo workloads'
     Output:
         fioDisplay.html 
     """
-    displayWLsample= [
-        {'filename':'quartz-4krr.txt',
-        'targetDescription':'SK hynix SE4011 SATA 960GB SSD',
-        'wlDescription':'4k Random Read/Write 70/30',
-        'datatype':'IOPS'},
-        
-        {'filename':'quartz-4krw.txt',
-        'targetDescription':'SK hynix SE5031 SATA 3840GB SSD',
-        'wlDescription':'4k Random Read/Write 100/0',
-        'datatype':'QoS'},
-        
-        {'filename':'quartz-4krr.txt',
-        'targetDescription':'SK hynix SE4011 SATA 960GB SSD',
-        'wlDescription':'4k Random Read/Write 70/30',
-        'datatype':'IOPS'},
-        
-        {'filename':'quartz-4krw.txt',
-        'targetDescription':'SK hynix SE5031 SATA 3840GB SSD',
-        'wlDescription':'4k Random Read/Write 100/0',
-        'datatype':'QoS'}
-        
-        ]
-        
-    if not displayWL:
-        displayWL = displayWLsample
     HTMLpage = ''
-    workloadsContainerHTML = generateContainers(displayWL)
+    workloadsContainerHTML = generateWorkloadContainers(workloadData)
     HTMLpage = htmlMain('{0}'.format(title),workloadsContainerHTML)    
     
-    for displayItem in displayWL:
-       HTMLpage += generateGraph(displayItem['outputTrackingFileL'],displayItem['wlDescription'],displayWL.index(displayItem))
-    
-    f = open('fioLiveGraph.html','w')
+    for displayItem in workloadData:
+        if displayItem['liveGraphs']: #if livegraphs are recorded for the workload
+            HTMLpage += generateGraphJS(
+               displayItem['file'],
+               displayItem['wlDescription'],
+               displayItem['liveGraphs'])
+
+    f = open(outputName,'w')
     f.write(HTMLpage)
     f.close()        
 

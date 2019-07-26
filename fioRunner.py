@@ -117,7 +117,7 @@ def startFIOprocess(workload, QoS):
             universal_newlines=True,
             shell=False)
         workload['process'] = fioThread
-        workload['wlDescription'] = ' . . . '.join([
+        workload['wlDescription'] = ' <br>'.join([
                         'Target= {}'.format(workload['target']),
                         'Block= {}'.format(workload['bs']),
                         'Rnd/Seq= {}'.format(workload['rw']),
@@ -140,6 +140,7 @@ def updateStatus(workload,QoS):
                 jsonBuf += line
             if  jsonBuf[-3:] == '\n}\n':
                 jsonFrame = json.loads(jsonBuf) 
+                
                 eta = jsonFrame['jobs'][0]['eta']
                 workload['eta'] = eta if eta < 1000000 else '0'
                 workload['eta'] = workload['eta']
@@ -150,6 +151,14 @@ def updateStatus(workload,QoS):
                 workload['iops'] = iops 
                 mbps = (jsonFrame['jobs'][0]['read']['bw']+jsonFrame['jobs'][0]['write']['bw'])/1024
                 workload['mbps'] = str(float('{:.{p}g}'.format(mbps,p=3)))
+                if 'clat_ns' in jsonFrame['jobs'][0]['read']:
+                    #fio 3.12:
+                    readQoS = jsonFrame['jobs'][0]['read']['clat_ns']['percentile']
+                    writeQoS = jsonFrame['jobs'][0]['write']['clat_ns']['percentile']
+                else:
+                    #fio 2.16:
+                    readQoS = jsonFrame['jobs'][0]['read']['clat']['percentile']
+                    writeQoS = jsonFrame['jobs'][0]['write']['clat']['percentile']
                 timestamp = datetime.datetime.isoformat(datetime.datetime.now()) 
                 data = ('{timestamp},{iops},{mbps}\n'.format(
                         timestamp=timestamp,
@@ -157,6 +166,7 @@ def updateStatus(workload,QoS):
                         mbps=mbps))# = str(int(float('{:.{p}g}'.format(mbps,p=3))))
                         #3 significant figures
                 workload['outputTrackingFileH'].write(data)
+                data = ','.join([data.strip('\n'),str(readQoS),str(writeQoS)]) 
                 open(workload['outputTrackingFileL'],'w').write(data)
                 jsonBuf = ''           
         else:       
@@ -202,19 +212,20 @@ def runFIO(workloadData,liveDisplay):
     try:
         df = FIOgenesis.createWorkloadDF(workloadData,2)
         QoS = 'QoS' in liveDisplay
-
+        updaters = []
         for wlDict in workloadData:
             print ('{0}{1}'.format('Starting Workload:',wlDict['filename']))
             startFIOprocess(wlDict,QoS)
             t = Thread(target=updateStatus, args=(wlDict,QoS))
             t.start()
-
+            updaters.append(t)
         if liveDisplay:
-            fioLiveGraph.createHTMLpage(workloadData,QoS)
+            liveHtmlFilename = 'fioLiveGraph.html'
+            fioLiveGraph.createHTMLpage(liveHtmlFilename,workloadData,liveDisplay)
             try: 
-                webbrowser.get('firefox').open('fioLiveGraph.html',new=0)
+                webbrowser.get('firefox').open(liveHtmlFilename,new=0)
             except:
-                webbrowser.open('fioLiveGraph.html',new=0)
+                webbrowser.open(liveHtmlFilename,new=0)
 
         print('\n'*(len(workloadData)+3))       
         resetCaret = len(workloadData)+3
@@ -226,7 +237,7 @@ def runFIO(workloadData,liveDisplay):
         df = FIOgenesis.createWorkloadDF(workloadData,2)
         print('\x1b[A'*(resetCaret)+'\r') #move caret back to beginning of table
         print(df.set_index('file')) #reprint workload monitor table    
-
+        [t.join() for t in updaters]
         for workload in workloadData:
             workload['process'] = workload['process'].poll()
             if workload['process'] != 0:

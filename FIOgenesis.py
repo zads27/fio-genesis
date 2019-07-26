@@ -80,14 +80,6 @@ def find_drives(display):
         block_dev = pandas.DataFrame([dict(entry.split('=') for entry in row) for row in block_dev])    
         block_dev.rename(columns={'KNAME':'TARGET'}, inplace=True)
         block_dev.insert(len(block_dev.columns),'Firmware','-')
-        '''
-        scsi_dev = [[x[30:46],x[47:51],x[53:].strip()] for x in subprocess.check_output('lsscsi').decode('utf-8').splitlines()] 
-        for x in block_dev: 
-            for drive in scsi_dev:           
-                if drive[-1] in x[0]:
-                    x[1] = drive[0]
-                    x[2] = drive[1]
-        '''
         try:
             nvme_dev = json.loads(subprocess.check_output(['sudo','nvme','list','-o','json']).decode('utf-8'))
             for drive in nvme_dev['Devices']:           
@@ -121,19 +113,15 @@ def createWorkloadDF(workloadData,dfType):
     Returns:
         DataFrame: a pandas DF with limited columns for display; exceeding terminal width will clip the displayed columns  
     """ 
-    for x in workloadData:
-        if len(x['filename']) > 20:
-            x['file'] = x['filename'][:8] + '...' + x['filename'][-8:]
-        else:
-            x['file'] = x['filename']
+
     df = pandas.DataFrame.from_dict(workloadData)
     
     if dfType == 1: #clip some output for screen display
         df = df[['file','target','bs','seqRand','readPercent','size','numJobs','iodepth','size','time']]
     elif dfType == 2: #clip some output for process tracking display
-        widths = {'iops':6,'mbps':5,'eta':15,'status':30}
+        widths = {'iops':6,'mbps':5,'eta':15,'status':35}
         for label in widths:
-            df.at[0,label] = df.iloc[0][label].rjust(widths[label]) 
+            df.at[0,label] = str(df.iloc[0][label]).rjust(widths[label]) 
         df = df[['filename','file','target','bs','seqRand','readPercent','iops','mbps','eta','status']].set_index('filename')
 
     return df
@@ -204,7 +192,12 @@ def importExtractWorkloadData():
                         '\u2517\u2501\u26A0 {0}'.format(dupCheck[fileChecksum(workload_file)]))
             else : 
                 dupCheck[fileChecksum(workload_file)] = workload_file
+            if len(workload_file) > 20:
+                shortfile = workload_file[:8] + '...' + workload_file[-8:]
+            else:
+                shortfile = workload_file 
             workloadData.append({'filename':workload_file,
+                                    'file':shortfile,
                                     'target':target,
                                     'bs':bs,
                                     'rw':rw,
@@ -218,7 +211,10 @@ def importExtractWorkloadData():
                                     'eta':'N/A',
                                     'iops':'0',
                                     'mbps':'0',
-                                    'percentComplete':0})
+                                    'percentComplete':0,
+                                    'liveGraphs':{}
+                                })
+
         except (IndexError,ValueError):
             #Remove to be able to run unparseable fio files?
             print ('\n*** ERROR: Could not parse complete data from WL file: {0} ***'.format(workload_file))
@@ -228,10 +224,7 @@ def importExtractWorkloadData():
             else:
                 sys.exit()
     print('')
-    if not workloadFiles:
-        print ('*** Workload list EMPTY! ***')
-    else:
-        return workloadData
+    return workloadData
     
 
 
@@ -356,7 +349,7 @@ def main():
                                 'Exit FIOgenesis']
                     }]
         else:
-            print("No Workloads found in currentWL/")
+            print("---No Workloads found in currentWL folder!---")
             userAction = [{
                 'type': 'list',
                 'message': 'Select Action:',
@@ -405,14 +398,44 @@ def main():
                 if confirm not in ['n','N','x','X']:
                     shutil.rmtree('results',ignore_errors=True)
                     os.mkdir('results')
-                    live = [{
+                    
+                    liveOutputSelect = [
+                        {
                             'type': 'checkbox',
                             'message': 'Would you like to plot and display live Benchmark Data?:',
-                            'name': 'liveDisplay',
-                            'choices': [{'name':'IOPS','checked':False},
-                                        {'name':'QoS','checked':False,}]#, 'disabled':'Pending workaround?'}]
-                            }]
-                    liveDisplay = prompt(live,style=fioGenerator.style)['liveDisplay']
+                            'name': 'displayTypes',
+                            'choices': [{'name':'MBPS','checked':False},
+                                        {'name':'IOPS','checked':False},
+                                        {'name':'QoS','checked':False,
+                                         'description':'Note that this will cause IOPS/MBPS to be running average'}]
+                        },
+                        {
+                            'type': 'checkbox',
+                            'message': 'Select files for {}:'.format('MBPS'),
+                            'name': 'MBPS',
+                            'choices': [{'name':x['filename'],'checked':False} for x in workloadData],
+                            'when': lambda answers: 'MBPS' in answers['displayTypes']
+                        },
+                        {
+                            'type': 'checkbox',
+                            'message': 'Select files for {}:'.format('IOPS'),
+                            'name': 'IOPS',
+                            'choices': [{'name':x['filename'],'checked':False} for x in workloadData],
+                            'when': lambda answers: 'IOPS' in answers['displayTypes']
+                        },
+                        {
+                            'type': 'checkbox',
+                            'message': 'Select files for {}:'.format('QoS'),
+                            'name': 'QoS',
+                            'choices': [{'name':x['filename'],'checked':False} for x in workloadData],
+                            'when': lambda answers: 'QoS' in answers['displayTypes']
+                        }]
+                    graphSelections = prompt(liveOutputSelect,style=fioGenerator.style)
+                    liveDisplay = graphSelections.pop('displayTypes')
+                    for graphType in graphSelections: #{'mbps':[file1,file2],'iops':[file2,file3],'qos':[]}
+                        for workload in workloadData: 
+                            if workload['filename'] in graphSelections[graphType]:
+                                workload['liveGraphs'][graphType] = ''
                     fioRunner.runFIO(workloadData,liveDisplay)
                     question = [{
                         'type': 'confirm',
