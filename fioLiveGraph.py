@@ -57,6 +57,7 @@ def generateWorkloadContainers(workloadData):
 """.format(ID=ID)
             workload['liveGraphs'][graph] = ID
             ID += 1
+            
         if graphsHTML: 
             workloadsContainerHTML += """
 <table style="width:100%">
@@ -77,7 +78,7 @@ def generateWorkloadContainers(workloadData):
     return workloadsContainerHTML
 
 
-def generateGraphJS(resultFile,workloadTitle,liveGraphs):
+def generateGraphJS(trackingFile,workloadTitle,liveGraphs):
     graphJS = ''
     for graphType in liveGraphs:
         containerID = liveGraphs[graphType]
@@ -195,7 +196,7 @@ function (chart) {{
     }}
 }});
 </script>
-""".format(File=resultFile,ID=containerID,perf=perf,units=('KIOPS' if graphType == 'IOPS' else 'MBPS'))
+""".format(File=trackingFile,ID=containerID,perf=perf,units=('KIOPS' if graphType == 'IOPS' else 'MBPS'))
     
     
     return graphJS
@@ -219,7 +220,7 @@ def createHTMLpage(outputName, workloadData, liveDisplay, title='SK hynix SSD be
     for displayItem in workloadData:
         if displayItem['liveGraphs']: #if livegraphs are recorded for the workload
             HTMLpage += generateGraphJS(
-               displayItem['file'],
+               displayItem['outputTrackingFileL'],
                displayItem['wlDescription'],
                displayItem['liveGraphs'])
 
