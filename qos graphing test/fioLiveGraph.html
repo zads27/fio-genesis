@@ -1,5 +1,6 @@
   
 <html>
+<meta http-equiv="Access-Control-Allow-Origin" content="*">
 <head>
 <script type="text/javascript" src="js/highcharts.js"></script>
 <script type="text/javascript" src="js/highcharts-more.js"></script>
@@ -62,7 +63,7 @@ function checkTime(i) {
 
 <script type="text/javascript">
 function loadperf0(callback) {   
-
+    
     var xobj = new XMLHttpRequest();
         xobj.overrideMimeType("text/csv");
     xobj.open('GET', 'WL_534689169899f223e927787f7d0c4fe0.datlive', false); // Replace 'my_data' with the path to your file
@@ -153,39 +154,28 @@ Highcharts.chart('u0container', {
         }
     }]
 
-},
+})
 // Add some life
-function (chart) {
-    if (!chart.renderer.forExport) {
-        setInterval(function () {
-            var point = chart.series[0].points[0],
-                newVal, newJSON;
-                loadperf0(function(response) {
-                    newVal = parseFloat(response);
-                    point.update(newVal);
-                });
-            point.update(newVal);
 
-        }, 1000);
-    }
-});
 </script>
 
 <script type="text/javascript">
+
+
 function loadperf1(callback) {   
 
     var xobj = new XMLHttpRequest();
         xobj.overrideMimeType("text/csv");
     xobj.open('GET', 'WL_534689169899f223e927787f7d0c4fe0.datlive', false); // Replace 'my_data' with the path to your file
     xobj.onreadystatechange = function () {
-          //if (xobj.readyState == 4 && xobj.status == 200) {
+          if (xobj.readyState == 4 && xobj.status == 200) {
             // Required use of an anonymous callback as .open will NOT return a value but simply returns undefined in asynchronous mode
-            // console.log(xobj.responseText);
-            callback(xobj.responseText.split(',')[3]);
-          //}
+            console.log(xobj.responseText);
+            callback(xobj.responseText);
+          }
     };
     xobj.send();  
-}
+};
 
 Highcharts.chart('u1container', {
 
@@ -276,7 +266,7 @@ Highcharts.chart('u1container', {
         }
         ]
 
-},
+},  
 // Add some life
 function (chart) {
     if (!chart.renderer.forExport) {
@@ -284,16 +274,16 @@ function (chart) {
             var point = chart.series[0].points[0],
                 newVal, newJSON;
                 loadperf1(function(response) {
-                    var data = eval(response);
+                    var data = JSON.parse(response.replace(/'/g,'"'));
                     for (var key in data) {
-                        alert(key + ':' + data[key])
+                        alert(key + ':' + data[key]); 
                     }
                         
-                    //newVal = parseFloat(response);
-                    //point.update(newVal);
+                    newVal = parseFloat(response);
+                    point.update(newVal);
                 });
             point.update(newVal);
-
+            
         }, 1000);
     }
 });
