@@ -1,6 +1,5 @@
   
 <html>
-<meta http-equiv="Access-Control-Allow-Origin" content="*">
 <head>
 <script type="text/javascript" src="js/highcharts.js"></script>
 <script type="text/javascript" src="js/highcharts-more.js"></script>
@@ -10,7 +9,7 @@ function startTime() {
     var today = new Date();
     var h = today.getHours();
     var m = today.getMinutes();
-    var s = today.getSeconds();
+    var s = today.getSeconds();	
     m = checkTime(m);
     s = checkTime(s);
     document.getElementById('clock').innerHTML =
@@ -154,9 +153,27 @@ Highcharts.chart('u0container', {
         }
     }]
 
-})
+},
 // Add some life
-
+function (chart) {
+    if (!chart.renderer.forExport) {
+        setInterval(function (response) {
+            var point = chart.series[0].points[0],
+                newVal, newJSON;
+                loadperf0(function(response) {
+                    var data = JSON.parse(response.toString().replace(/'/g,'"'));
+                    for (var key in data) {
+                        alert(key + ':' + data[key]); 
+                    }
+                        
+                    newVal = parseFloat(response);
+                    point.update(newVal);
+                });
+            point.update(newVal);
+            
+        }, 1000);
+    }
+})
 </script>
 
 <script type="text/javascript">
@@ -170,8 +187,9 @@ function loadperf1(callback) {
     xobj.onreadystatechange = function () {
           if (xobj.readyState == 4 && xobj.status == 200) {
             // Required use of an anonymous callback as .open will NOT return a value but simply returns undefined in asynchronous mode
-            console.log(xobj.responseText);
-            callback(xobj.responseText);
+            resp = xobj.responseText;
+            resp = resp.slice(resp.indexOf('{'),resp.indexOf('}')+1);
+            callback(resp);
           }
     };
     xobj.send();  
@@ -180,19 +198,7 @@ function loadperf1(callback) {
 Highcharts.chart('u1container', {
 
     chart: {
-        type: 'bar'
-    },
-
-    pane: {
-        size: '100%',
-        startAngle: -120,
-        endAngle: 120,
-        background: {
-            backgroundColor: (Highcharts.theme && Highcharts.theme.background2) || '#EEE',
-            innerRadius: '60%',
-            outerRadius: '100%',
-            shape: 'arc'
-        }
+        type: 'column'
     },
 
     title: {
@@ -214,26 +220,7 @@ Highcharts.chart('u1container', {
 
     // the value axis
     yAxis: {
-        min: 0,
-        max: 5000,
-        title: { text: 'MBPS' },
-        stops: [
-            [0.2, '#DF5353'], // red
-            [0.5, '#DDDF0D'], // yellow
-            [0.8, '#33CC33'] // green
-        ],
-        lineWidth: 0,
-        minorTickInterval: null,
-        tickAmount: 2,
-        title: {
-            y: -70
-        },
-        labels: {
-            y: 30,
-            style: {
-                fontSize: "20px"
-            }
-        }
+        type: 'logarithmic',
     },
 
     plotOptions: {
@@ -270,21 +257,20 @@ Highcharts.chart('u1container', {
 // Add some life
 function (chart) {
     if (!chart.renderer.forExport) {
-        setInterval(function () {
-            var point = chart.series[0].points[0],
-                newVal, newJSON;
+        setInterval(function (response) {
+            var point = chart.series[0],
+                newVal = [], newJSON;
                 loadperf1(function(response) {
                     var data = JSON.parse(response.replace(/'/g,'"'));
                     for (var key in data) {
-                        alert(key + ':' + data[key]); 
+                        newVal.push(data[key]/1000000); 
                     }
-                        
-                    newVal = parseFloat(response);
-                    point.update(newVal);
-                });
-            point.update(newVal);
+                });    
+            console.log(chart.series)
+            newVal.sort(function(a,b){return a-b});
+            point.update({data:newVal});
             
-        }, 1000);
+        }, 5000);
     }
 });
 </script>
