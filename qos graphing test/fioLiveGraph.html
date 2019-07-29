@@ -160,12 +160,7 @@ function (chart) {
         setInterval(function (response) {
             var point = chart.series[0].points[0],
                 newVal, newJSON;
-                loadperf0(function(response) {
-                    var data = JSON.parse(response.toString().replace(/'/g,'"'));
-                    for (var key in data) {
-                        alert(key + ':' + data[key]); 
-                    }
-                        
+                loadperf0(function(response) {                    
                     newVal = parseFloat(response);
                     point.update(newVal);
                 });
@@ -188,8 +183,7 @@ function loadperf1(callback) {
           if (xobj.readyState == 4 && xobj.status == 200) {
             // Required use of an anonymous callback as .open will NOT return a value but simply returns undefined in asynchronous mode
             resp = xobj.responseText;
-            resp = resp.slice(resp.indexOf('{'),resp.indexOf('}')+1);
-            callback(resp);
+            callback(resp.slice(resp.indexOf('{'),resp.indexOf('}')+1));
           }
     };
     xobj.send();  
@@ -235,7 +229,7 @@ Highcharts.chart('u1container', {
 
     series: [{
         name: 'Read',
-        data: [90,100,5000],
+        data: [],
         dataLabels: {
             format: '<div style="text-align:center"><span style="font-size:40px;color:' +
                 ((Highcharts.theme && Highcharts.theme.contrastTextColor) || 'black') + '">{y}</span><br/>' +
@@ -244,7 +238,7 @@ Highcharts.chart('u1container', {
         },
         {
             name: 'Write',
-            data: [99,230,3000],
+            data: [],
             dataLabels: {
                 format: '<div style="text-align:center"><span style="font-size:40px;color:' +
                     ((Highcharts.theme && Highcharts.theme.contrastTextColor) || 'black') + '">{y}</span><br/>' +

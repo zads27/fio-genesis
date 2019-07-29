@@ -53,7 +53,7 @@ def generateWorkloadContainers(workloadData):
 <td>
 <div id="u{ID}container" style="max-width:100%; height: 100%; margin: 0 auto">
 </div>
-<td>
+</td>
 """.format(ID=ID)
             workload['liveGraphs'][graph] = ID
             ID += 1
@@ -82,22 +82,49 @@ def generateGraphJS(trackingFile,workloadTitle,liveGraphs):
     graphJS = ''
     for graphType in liveGraphs:
         containerID = liveGraphs[graphType]
-        dataloc = {'IOPS':1,'MBPS':2}
-        if graphType in dataloc:    
-            perf = dataloc[graphType]
-            graphJS += """
+        units = {'IOPS':'KIOPS','MBPS':'MBPS','QoS':'uSec'}[graphType]
+        if graphType in ['IOPS','MBPS']:    
+            dataLoc = {'IOPS':1,'MBPS':2}[graphType]
+            dataCallback = "callback(xobj.responseText.split(',')[{dataLoc}]/1000);".format(dataLoc=dataLoc)
+            updateDataFunc = """
+            var point = chart.series[0].points[0],
+                newVal, newJSON;
+                loadperf{ID}(function(response) {{
+                    newVal = parseFloat(response);
+                    point.update(newVal);
+                }});
+            point.update(newVal);            
+            """.format(ID=containerID)
+        elif graphType == 'QoS':
+            dataCallback = '''
+            resp = xobj.responseText;
+            callback(resp.slice(resp.indexOf('{'),resp.indexOf('}')+1));
+            '''
+            updateDataFunc = """
+            var point = chart.series[0],
+                newVal = [], newJSON;
+                loadperf{ID}(function(response) {{
+                    var data = JSON.parse(response.replace(/'/g,'"'));
+                    for (var key in data) {{
+                        newVal.push(data[key]/1000000); 
+                    }}
+                }});    
+            console.log(chart.series)
+            newVal.sort(function(a,b){{return a-b}});
+        point.update({{data:newVal}});
+            """.format(ID=containerID)
+        
+        graphJS += """
 <script type="text/javascript">
 function loadperf{ID}(callback) {{   
 
     var xobj = new XMLHttpRequest();
         xobj.overrideMimeType("text/csv");
-    xobj.open('GET', '{File}', false); // Replace 'my_data' with the path to your file
+    xobj.open('GET', '{File}', false); 
     xobj.onreadystatechange = function () {{
-          //if (xobj.readyState == 4 && xobj.status == 200) {{
-            // Required use of an anonymous callback as .open will NOT return a value but simply returns undefined in asynchronous mode
             // console.log(xobj.responseText);
-            callback(xobj.responseText.split(',')[{perf}]/1000);
-          //}}
+            {dataCallback}
+
     }};
     xobj.send();  
 }}
@@ -105,7 +132,7 @@ function loadperf{ID}(callback) {{
 Highcharts.chart('u{ID}container', {{
 
     chart: {{
-        type: 'solidgauge'
+        type: '{chartType}'
     }},
 
     pane: {{
@@ -134,8 +161,6 @@ Highcharts.chart('u{ID}container', {{
 
     // the value axis
     yAxis: {{
-        min: 0,
-        max: 200,
         title: {{ text: '{units}' }},
         stops: [
             [0.2, '#DF5353'], // red
@@ -168,12 +193,13 @@ Highcharts.chart('u{ID}container', {{
 
     series: [{{
         name: '{units}',
-        data: [90],
+        data: [0],
         dataLabels: {{
             format: '<div style="text-align:center"><span style="font-size:40px;color:' +
                 ((Highcharts.theme && Highcharts.theme.contrastTextColor) || 'black') + '">{{y}}</span><br/>' +
                    '<span style="font-size:24px;color:#999999">{units}</span></div>'
         }},
+        
         tooltip: {{
             valueSuffix: '{units}'
         }}
@@ -184,19 +210,17 @@ Highcharts.chart('u{ID}container', {{
 function (chart) {{
     if (!chart.renderer.forExport) {{
         setInterval(function () {{
-            var point = chart.series[0].points[0],
-                newVal, newJSON;
-                loadperf{ID}(function(response) {{
-                    newVal = parseFloat(response);
-                    point.update(newVal);
-                }});
-            point.update(newVal);
-
+            {updateDataFunc}
         }}, 1000);
     }}
 }});
 </script>
-""".format(File=trackingFile,ID=containerID,perf=perf,units=('KIOPS' if graphType == 'IOPS' else 'MBPS'))
+""".format(File=trackingFile,
+           ID=containerID,
+           units=units,
+           dataCallback=dataCallback,
+           chartType={'IOPS':'solidgauge','MBPS':'solidgauge','QoS':'column'}[graphType],
+           updateDataFunc=updateDataFunc)
     
     
     return graphJS
@@ -217,12 +241,12 @@ def createHTMLpage(outputName, workloadData, liveDisplay, title='SK hynix SSD be
     workloadsContainerHTML = generateWorkloadContainers(workloadData)
     HTMLpage = htmlMain('{0}'.format(title),workloadsContainerHTML)    
     
-    for displayItem in workloadData:
-        if displayItem['liveGraphs']: #if livegraphs are recorded for the workload
+    for workload in workloadData:
+        if workload['liveGraphs']: #if livegraphs are recorded for the workload
             HTMLpage += generateGraphJS(
-               displayItem['outputTrackingFileL'],
-               displayItem['wlDescription'],
-               displayItem['liveGraphs'])
+               workload['outputTrackingFileL'],
+               workload['wlDescription'],
+               workload['liveGraphs'])
 
     f = open(outputName,'w')
     f.write(HTMLpage)
