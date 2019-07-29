@@ -153,8 +153,9 @@ def updateStatus(workload,QoS):
                 iops = int(jsonFrame['jobs'][0]['read']['iops']+jsonFrame['jobs'][0]['write']['iops'])
                 #write to bandwidth log file, live output file, status panel (workload)
                 workload['iops'] = str(iops) 
-                mbps = (jsonFrame['jobs'][0]['read']['bw']+jsonFrame['jobs'][0]['write']['bw'])/1024
-                workload['mbps'] = str(float('{:.{p}g}'.format(mbps,p=3)))
+                mbps = (jsonFrame['jobs'][0]['read']['bw']+jsonFrame['jobs'][0]['write']['bw'])
+                mbps = str(float('{:.{p}g}'.format(mbps,p=3)))
+                workload['mbps'] = mbps
                 if 'clat_ns' in jsonFrame['jobs'][0]['read']:
                     #fio 3.12:
                     readQoS = jsonFrame['jobs'][0]['read']['clat_ns']['percentile']
@@ -230,7 +231,6 @@ def runFIO(workloadData,liveDisplay):
                 webbrowser.get('firefox').open(liveHtmlFilename,new=0)
             except:
                 webbrowser.open(liveHtmlFilename,new=0)
-
         print('\n'*(len(workloadData)+3))       
         resetCaret = len(workloadData)+3
         while any(wl['percentComplete'] != 100 for wl in workloadData):

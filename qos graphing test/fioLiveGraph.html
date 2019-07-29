@@ -105,6 +105,10 @@ Highcharts.chart('u0container', {
     credits: {
         enabled: false
     },
+    
+    xAxis: {
+    //    categories = ['test']
+    },
 
     // the value axis
     yAxis: {
@@ -229,7 +233,7 @@ Highcharts.chart('u1container', {
 
     series: [{
         name: 'Read',
-        data: [],
+        data: [0,0,0],
         dataLabels: {
             format: '<div style="text-align:center"><span style="font-size:40px;color:' +
                 ((Highcharts.theme && Highcharts.theme.contrastTextColor) || 'black') + '">{y}</span><br/>' +
@@ -238,7 +242,7 @@ Highcharts.chart('u1container', {
         },
         {
             name: 'Write',
-            data: [],
+            data: [0,0,0],
             dataLabels: {
                 format: '<div style="text-align:center"><span style="font-size:40px;color:' +
                     ((Highcharts.theme && Highcharts.theme.contrastTextColor) || 'black') + '">{y}</span><br/>' +

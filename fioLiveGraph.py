@@ -36,7 +36,7 @@ function checkTime(i) {{
 {workloadsContainerHTML} 
 <div style="text-align:center">
     <div style="display:inline;">{systemName} / FIO v{fio} / </div>
-    <!-- <div id="clock" style="display:inline;"></div> -->
+    <div id="clock" style="display:inline;"></div>
 </div>
 </body>
 """.format(graphTitle=title,workloadsContainerHTML=workloadsContainerHTML,systemName=systemName,fio=fioVers)
@@ -48,24 +48,25 @@ def generateWorkloadContainers(workloadData):
     workloadsContainerHTML = ''
     for workload in workloadData: 
         graphsHTML = ''
-        for graph in workload['liveGraphs']:
-            graphsHTML += """
+        for graph in ['IOPS','MBPS','QoS']:
+            if graph in workload['liveGraphs']:
+                workload['liveGraphs'][graph] = ID
+                graphsHTML += """
 <td>
 <div id="u{ID}container" style="max-width:100%; height: 100%; margin: 0 auto">
 </div>
 </td>
 """.format(ID=ID)
-            workload['liveGraphs'][graph] = ID
-            ID += 1
-            
+                ID += 1                
+                
         if graphsHTML: 
             workloadsContainerHTML += """
 <table style="width:100%">
 <thead>
 <tr>
 <td style="text-align:right; font-size:20px; width:33%">{File}</td> 
-<td style="text-align:left; font-size:12px; width:33%">{Title}</td>
-<td style="width:33%"> </td>
+<td style="text-align:center; font-size:12px; width:33%">{Title}</td>
+<td style="text-align:left; width:33%"> </td>
 </tr>
 </thead>
 <tbody>
@@ -83,36 +84,81 @@ def generateGraphJS(trackingFile,workloadTitle,liveGraphs):
     for graphType in liveGraphs:
         containerID = liveGraphs[graphType]
         units = {'IOPS':'KIOPS','MBPS':'MBPS','QoS':'uSec'}[graphType]
+        
         if graphType in ['IOPS','MBPS']:    
+            yLog = 'min:0,'
+            percentiles = ''
             dataLoc = {'IOPS':1,'MBPS':2}[graphType]
+            chartType = 'solidgauge'            
             dataCallback = "callback(xobj.responseText.split(',')[{dataLoc}]/1000);".format(dataLoc=dataLoc)
-            updateDataFunc = """
-            var point = chart.series[0].points[0],
-                newVal, newJSON;
-                loadperf{ID}(function(response) {{
-                    newVal = parseFloat(response);
-                    point.update(newVal);
-                }});
-            point.update(newVal);            
-            """.format(ID=containerID)
-        elif graphType == 'QoS':
-            dataCallback = '''
-            resp = xobj.responseText;
-            callback(resp.slice(resp.indexOf('{'),resp.indexOf('}')+1));
-            '''
-            updateDataFunc = """
-            var point = chart.series[0],
-                newVal = [], newJSON;
-                loadperf{ID}(function(response) {{
-                    var data = JSON.parse(response.replace(/'/g,'"'));
-                    for (var key in data) {{
-                        newVal.push(data[key]/1000000); 
+            dataSeries = """
+                {{
+                name: '{units}',
+                data: [0],
+                dataLabels: {{
+                    format: '<div style="text-align:center"><span style="font-size:40px;color:' +
+                        ((Highcharts.theme && Highcharts.theme.contrastTextColor) || 'black') + '">{{y}}</span><br/>' +
+                           '<span style="font-size:24px;color:#999999">{units}</span></div>'}},
+                tooltip: {{
+                    valueSuffix: '{units}'
                     }}
-                }});    
-            console.log(chart.series)
-            newVal.sort(function(a,b){{return a-b}});
-        point.update({{data:newVal}});
-            """.format(ID=containerID)
+                }},
+                """.format(units=units)            
+            updateDataFunc = """
+                var point = chart.series[0].points[0],
+                    newVal, newJSON;
+                    loadperf{ID}(function(response) {{
+                        newVal = parseFloat(response);
+                        point.update(newVal);
+                    }});
+                point.update(newVal);            
+                """.format(ID=containerID)
+        
+        
+        elif graphType == 'QoS':
+            yLog = "type: 'logarithmic',"
+            percentiles = 'categories: {}'.format(['99%','99.99%'])
+            chartType = 'column'
+            dataCallback = '''
+                resp = xobj.responseText;
+                callback(resp.slice(resp.indexOf('{'),resp.indexOf('}')+1));
+                '''
+            dataSeries = """
+                {{
+                name: 'Read',
+                data: [1],
+                dataLabels: {{
+                    format: '<div style="text-align:center"><span style="font-size:40px;color:' +
+                        ((Highcharts.theme && Highcharts.theme.contrastTextColor) || 'black') + '">{{y}}</span><br/>' +
+                           '<span style="font-size:24px;color:#999999">{units}</span></div>'}},
+                tooltip: {{
+                    valueSuffix: '{units}'
+                    }}
+                }},
+                {{
+                name: 'Write',
+                data: [1],
+                dataLabels: {{
+                    format: '<div style="text-align:center"><span style="font-size:40px;color:' +
+                        ((Highcharts.theme && Highcharts.theme.contrastTextColor) || 'black') + '">{{y}}</span><br/>' +
+                           '<span style="font-size:24px;color:#999999">{units}</span></div>'}},
+                tooltip: {{
+                    valueSuffix: '{units}'
+                    }}
+                }},
+                """.format(units=units)             
+            updateDataFunc = """
+                var point = chart.series[0],
+                    newVal = [], newJSON;
+                    loadperf{ID}(function(response) {{
+                        var data = JSON.parse(response.replace(/'/g,'"'));
+                        for (var key in data) {{
+                            newVal.push(data[key]/1000000); 
+                        }}
+                    }});    
+                newVal.sort(function(a,b){{return a-b}});
+            point.update({{data:newVal}});
+                """.format(ID=containerID)
         
         graphJS += """
 <script type="text/javascript">
@@ -146,7 +192,11 @@ Highcharts.chart('u{ID}container', {{
             shape: 'arc'
         }}
     }},
-
+    
+    xAxis:{{
+        {percentiles} 
+    }},
+    
     title: {{
         text: undefined
     }},
@@ -161,6 +211,7 @@ Highcharts.chart('u{ID}container', {{
 
     // the value axis
     yAxis: {{
+        {yLog}
         title: {{ text: '{units}' }},
         stops: [
             [0.2, '#DF5353'], // red
@@ -191,19 +242,9 @@ Highcharts.chart('u{ID}container', {{
         }}
     }},
 
-    series: [{{
-        name: '{units}',
-        data: [0],
-        dataLabels: {{
-            format: '<div style="text-align:center"><span style="font-size:40px;color:' +
-                ((Highcharts.theme && Highcharts.theme.contrastTextColor) || 'black') + '">{{y}}</span><br/>' +
-                   '<span style="font-size:24px;color:#999999">{units}</span></div>'
-        }},
-        
-        tooltip: {{
-            valueSuffix: '{units}'
-        }}
-    }}]
+    series: [
+        {dataSeries}
+    ]
 
 }},
 // Add some life
@@ -216,11 +257,14 @@ function (chart) {{
 }});
 </script>
 """.format(File=trackingFile,
-           ID=containerID,
-           units=units,
-           dataCallback=dataCallback,
-           chartType={'IOPS':'solidgauge','MBPS':'solidgauge','QoS':'column'}[graphType],
-           updateDataFunc=updateDataFunc)
+            ID=containerID,
+            units=units,
+            dataCallback=dataCallback,
+            chartType=chartType,
+            updateDataFunc=updateDataFunc,
+            yLog=yLog,
+            dataSeries=dataSeries,
+            percentiles=percentiles)
     
     
     return graphJS
