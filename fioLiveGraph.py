@@ -227,9 +227,6 @@ Highcharts.chart('u{ID}container', {{
             [0.5, '#DDDF0D'], // yellow
             [0.8, '#33CC33'] // green
         ],
-        lineWidth: 0,
-        minorTic kInterval: null,
-        tickAmount: 2,
         title: {{
             y: -70
         }},
