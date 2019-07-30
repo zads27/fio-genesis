@@ -83,7 +83,7 @@ def generateGraphJS(trackingFile,workloadTitle,liveGraphs,liveDisplay):
     graphJS = ''
     for graphType in liveGraphs:
         containerID = liveGraphs[graphType]
-        units = {'IOPS':'KIOPS','MBPS':'MBPS','QoS':'uSec'}[graphType]
+        units = {'IOPS':'IOPS','MBPS':'MBPS','QoS':'uSec'}[graphType]
         
         if graphType in ['IOPS','MBPS']:    
             yLog = 'min:0,'
@@ -228,7 +228,7 @@ Highcharts.chart('u{ID}container', {{
             [0.8, '#33CC33'] // green
         ],
         lineWidth: 0,
-        minorTickInterval: null,
+        minorTic kInterval: null,
         tickAmount: 2,
         title: {{
             y: -70
@@ -254,7 +254,7 @@ Highcharts.chart('u{ID}container', {{
                 y: -35,
                 borderWidth: 0,
                 useHTML: true,
-                enabled: true
+                enabled: true,
                 rotation: -90
             }}
         }}
