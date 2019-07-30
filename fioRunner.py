@@ -65,6 +65,7 @@ def get_value(line):
         result['eta'] = re.search('\[eta\s+([0-9dhms:]+)',m[3]).group(1)
     return result  
     
+    
 def progBar(percentage):
     """
     Create 'shaded' progress bar string of variable length
@@ -90,7 +91,7 @@ def progBar(percentage):
     return progress
     
     
-def startFIOprocess(workload, QoS):                  
+def startFIOprocess(workload, liveDisplayOptions):                  
     """
     Runs fio executable with JSON fio output for WL*.fio to WL*.log 
     
@@ -105,10 +106,10 @@ def startFIOprocess(workload, QoS):
     """        
     try: 
         fio_command = ['sudo','fio',workload['filename']]
-        if QoS:
+        if 'QoS' in workload['liveGraphs']:
             fio_command.append('--status-interval=1')
             fio_command.append('--output-format=json')
-            fio_command.append('--percentile_list=1:10:50:90:95:99:99.9:99.99:99.999:99.9999:99.99999:99.999999')
+            fio_command.append('--percentile_list={}'.format(liveDisplayOptions['QoS_percentiles']))
         else:
             fio_command.append('--output=results/{}'.format(workload['filename'].split('.')[0]+'.log'))
             fio_command.append('--eta=always')
@@ -136,11 +137,11 @@ def startFIOprocess(workload, QoS):
         print('startFIOprocess error: {0}'.format(e))
 
 
-def updateStatus(workload,QoS): 
+def updateStatus(workload): 
     jsonBuf = ''
     while True:    
         line = workload['process'].stdout.readline()
-        if QoS:
+        if 'QoS' in workload['liveGraphs']:
             if (line == '{\n') or jsonBuf:
                 jsonBuf += line
             if  jsonBuf[-3:] == '\n}\n':
@@ -153,7 +154,7 @@ def updateStatus(workload,QoS):
                 iops = int(jsonFrame['jobs'][0]['read']['iops']+jsonFrame['jobs'][0]['write']['iops'])
                 #write to bandwidth log file, live output file, status panel (workload)
                 workload['iops'] = str(iops) 
-                mbps = (jsonFrame['jobs'][0]['read']['bw']+jsonFrame['jobs'][0]['write']['bw'])
+                mbps = (jsonFrame['jobs'][0]['read']['bw']+jsonFrame['jobs'][0]['write']['bw'])/1024
                 mbps = str(float('{:.{p}g}'.format(mbps,p=3)))
                 workload['mbps'] = mbps
                 if 'clat_ns' in jsonFrame['jobs'][0]['read']:
@@ -193,7 +194,7 @@ def updateStatus(workload,QoS):
         if line == '' and workload['process'].poll() is not None: 
             workload['percentComplete'] = 100   
             workload['outputTrackingFileH'].close()
-            if QoS: 
+            if 'QoS' in workload['liveGraphs']: 
                 workload['status'] = 'Complete'
             if workload['process'].poll() != 0:
                 workload['status'] = 'Error: {}'.format(workload['process'].returncode)
@@ -216,12 +217,11 @@ def runFIO(workloadData,liveDisplay):
     """ 
     if 1:#try:
         df = FIOgenesis.createWorkloadDF(workloadData,2)
-        QoS = 'QoS' in liveDisplay
         updaters = []
-        for wlDict in workloadData:
-            print ('{0}{1}'.format('Starting Workload:',wlDict['filename']))
-            startFIOprocess(wlDict,QoS)
-            t = Thread(target=updateStatus, args=(wlDict,QoS))
+        for workload in workloadData:
+            print ('Starting Workload:   {}'.format(workload['filename']))
+            startFIOprocess(workload,liveDisplay)
+            t = Thread(target=updateStatus, args=(workload,))
             t.start()
             updaters.append(t)
         if liveDisplay:
@@ -251,6 +251,6 @@ def runFIO(workloadData,liveDisplay):
         print('FIO-run Complete')
         
     #except KeyboardInterrupt:
-        print('\nFIO-run Terminated') 
+        #print('\nFIO-run Terminated') 
        
    

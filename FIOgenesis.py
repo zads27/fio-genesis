@@ -291,7 +291,7 @@ def plotOutput(liveDisplay):
                        )
         iopsdata.append(iopsTrace)
         mbpsdata.append(mbpsTrace)
-    layout = go.Layout(title='Running Average Performance chart' if 'QoS' in liveDisplay else 'Workload Performance chart output',
+    layout = go.Layout(title='Running Average Performance chart' if 'QoS' in liveDisplay['graphTypes'] else 'Workload Performance chart output',
                        paper_bgcolor='rgb(230, 230, 230)',
                        plot_bgcolor='rgb(200 , 200 , 200)')    
     fig = tools.make_subplots(rows=2,cols=1,shared_xaxes=True,vertical_spacing=0.02,print_grid=False)
@@ -403,16 +403,16 @@ def main():
                             'type': 'checkbox',
                             'message': 'Would you like to plot and display live Benchmark Data?:',
                             'name': 'displayTypes',
-                            'choices': [{'name':'MBPS','checked':False},
-                                        {'name':'IOPS','checked':False},
-                                        {'name':'QoS','checked':False}]
+                            'choices': [{'name':'IOPS','checked':False},
+                                        {'name':'MBPS','checked':False},
+                                        {'name':'QoS','checked':False}] 
                         },
                         {
-                            'type': 'checkbox',
-                            'message': 'Select workloads for {} live output:'.format('MBPS'),
-                            'name': 'MBPS',
-                            'choices': [{'name':x['filename'],'checked':False} for x in workloadData],
-                            'when': lambda answers: 'MBPS' in answers['displayTypes']
+                            'type': 'input',
+                            'message': 'Enter desired QoS percentiles:',
+                            'name': 'QoS_percentiles',
+                            'default': '10:50:90:95:99:99.9:99.99:99.999:99.9999:99.99999:99.999999',
+                            'when': lambda answers: 'QoS' in answers['displayTypes']
                         },
                         {
                             'type': 'checkbox',
@@ -423,17 +423,28 @@ def main():
                         },
                         {
                             'type': 'checkbox',
+                            'message': 'Select workloads for {} live output:'.format('MBPS'),
+                            'name': 'MBPS',
+                            'choices': [{'name':x['filename'],'checked':False} for x in workloadData],
+                            'when': lambda answers: 'MBPS' in answers['displayTypes']
+                        },
+                        {
+                            'type': 'checkbox',
                             'message': 'Select workloads for {} live output:'.format('QoS'),
                             'name': 'QoS',
-                            'choices': [Separator('Note that MBPS and IOPS will be running averages when QoS is selected')] +                 
-                                        [{'name':x['filename'],'checked':False} for x in workloadData],
+                            'choices': [Separator(
+                                'Note that MBPS and IOPS will be running averages when QoS is selected')] +
+                                [{'name':x['filename'],'checked':False} for x in workloadData],
                             'when': lambda answers: 'QoS' in answers['displayTypes']
                         }]
-                    graphSelections = prompt(liveOutputSelect,style=fioGenerator.style)
-                    liveDisplay = graphSelections.pop('displayTypes')
-                    for graphType in graphSelections: #{'mbps':[file1,file2],'iops':[file2,file3],'qos':[]}
+                    #ERROR CASE: SELECT ONE different GRAPH PER WORKLOAD; QOS doesn't display
+                    liveOutputSelect = prompt(liveOutputSelect,style=fioGenerator.style)
+                    liveDisplay = {'graphTypes':liveOutputSelect.pop('displayTypes')}
+                    if 'QoS_percentiles' in liveOutputSelect:
+                        liveDisplay['QoS_percentiles'] = liveOutputSelect.pop('QoS_percentiles')
+                    for graphType in liveOutputSelect: #{'mbps':[file1,file2],'iops':[file2,file3],'qos':[]}
                         for workload in workloadData: 
-                            if workload['filename'] in graphSelections[graphType]:
+                            if workload['filename'] in liveOutputSelect[graphType]:
                                 workload['liveGraphs'][graphType] = ''
                     fioRunner.runFIO(workloadData,liveDisplay)
                     question = [{

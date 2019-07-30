@@ -79,7 +79,7 @@ def generateWorkloadContainers(workloadData):
     return workloadsContainerHTML
 
 
-def generateGraphJS(trackingFile,workloadTitle,liveGraphs):
+def generateGraphJS(trackingFile,workloadTitle,liveGraphs,liveDisplay):
     graphJS = ''
     for graphType in liveGraphs:
         containerID = liveGraphs[graphType]
@@ -117,11 +117,11 @@ def generateGraphJS(trackingFile,workloadTitle,liveGraphs):
         
         elif graphType == 'QoS':
             yLog = "type: 'logarithmic',"
-            percentiles = 'categories: {}'.format(['99%','99.99%'])
+            percentiles = "categories: ['{}']".format(liveDisplay['QoS_percentiles'].replace(':',"','"))
             chartType = 'column'
             dataCallback = '''
                 resp = xobj.responseText;
-                callback(resp.slice(resp.indexOf('{'),resp.indexOf('}')+1));
+                callback(resp.slice(resp.indexOf('{'),resp.lastIndexOf('}')+1));
                 '''
             dataSeries = """
                 {{
@@ -129,8 +129,9 @@ def generateGraphJS(trackingFile,workloadTitle,liveGraphs):
                 data: [1],
                 dataLabels: {{
                     format: '<div style="text-align:center"><span style="font-size:40px;color:' +
-                        ((Highcharts.theme && Highcharts.theme.contrastTextColor) || 'black') + '">{{y}}</span><br/>' +
-                           '<span style="font-size:24px;color:#999999">{units}</span></div>'}},
+                        ((Highcharts.theme && Highcharts.theme.contrastTextColor) || 'black') + 
+                        '">{{y}}</span><br/>' +
+                        '<span style="font-size:24px;color:#999999">{units}</span></div>'}},
                 tooltip: {{
                     valueSuffix: '{units}'
                     }}
@@ -140,24 +141,30 @@ def generateGraphJS(trackingFile,workloadTitle,liveGraphs):
                 data: [1],
                 dataLabels: {{
                     format: '<div style="text-align:center"><span style="font-size:40px;color:' +
-                        ((Highcharts.theme && Highcharts.theme.contrastTextColor) || 'black') + '">{{y}}</span><br/>' +
-                           '<span style="font-size:24px;color:#999999">{units}</span></div>'}},
+                        ((Highcharts.theme && Highcharts.theme.contrastTextColor) || 'black') + 
+                        '">{{y}}</span><br/>' +
+                        '<span style="font-size:24px;color:#999999">{units}</span></div>'}},
                 tooltip: {{
                     valueSuffix: '{units}'
                     }}
                 }},
                 """.format(units=units)             
             updateDataFunc = """
-                var point = chart.series[0],
-                    newVal = [], newJSON;
+                var rd = chart.series[0], wr=chart.series[1]
+                    newRd = [], newWr = [];
                     loadperf{ID}(function(response) {{
-                        var data = JSON.parse(response.replace(/'/g,'"'));
-                        for (var key in data) {{
-                            newVal.push(data[key]/1000000); 
+                        var data = JSON.parse('['+response.replace(/'/g,'"')+']');
+                        for (var key in data[0]) {{
+                            newRd.push(data[0][key]/1000000); 
+                        }}
+                        for (var key in data[1]) {{
+                            newWr.push(data[1][key]/1000000); 
                         }}
                     }});    
-                newVal.sort(function(a,b){{return a-b}});
-            point.update({{data:newVal}});
+                newRd.sort(function(a,b){{return a-b}});
+                newWr.sort(function(a,b){{return a-b}});
+            rd.update({{data:newRd}});
+            wr.update({{data:newWr}});
                 """.format(ID=containerID)
         
         graphJS += """
@@ -290,7 +297,8 @@ def createHTMLpage(outputName, workloadData, liveDisplay, title='SK hynix SSD be
             HTMLpage += generateGraphJS(
                workload['outputTrackingFileL'],
                workload['wlDescription'],
-               workload['liveGraphs'])
+               workload['liveGraphs'],
+               liveDisplay)
 
     f = open(outputName,'w')
     f.write(HTMLpage)
