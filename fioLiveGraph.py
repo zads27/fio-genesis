@@ -86,7 +86,7 @@ def generateGraphJS(trackingFile,workloadTitle,liveGraphs,liveDisplay):
         units = {'IOPS':'IOPS','MBPS':'MBPS','QoS':'mS'}[graphType]
         
         if graphType in ['IOPS','MBPS']:    
-            yLog = 'min:0,'
+            yLog = 'min:0,tickAmount: 2,'
             percentiles = ''
             dataLoc = {'IOPS':1,'MBPS':2}[graphType]
             chartType = 'solidgauge'            
@@ -117,7 +117,7 @@ def generateGraphJS(trackingFile,workloadTitle,liveGraphs,liveDisplay):
         
         
         elif graphType == 'QoS':
-            yLog = "type: 'logarithmic',"
+            yLog = "type: 'logarithmic',min:0.1,max:10"
             percentiles = "categories: ['{}']".format(liveDisplay['QoS_percentiles'].replace(':',"','"))
             percentiles += ",\ntitle:{text:'Completion Latency (mS)'}"
             chartType = 'column'
@@ -227,6 +227,8 @@ Highcharts.chart('u{ID}container', {{
             [0.5, '#DDDF0D'], // yellow
             [0.8, '#33CC33'] // green
         ],
+        lineWidth: 0,
+        minorTickInterval: null,
         title: {{
             y: -70
         }},
