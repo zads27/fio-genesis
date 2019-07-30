@@ -13,12 +13,15 @@ def htmlMain(title,workloadsContainerHTML):
 <script>
 var start = new Date();
 function timer() {{
-    var today = new Date();
-    var h = today.getHours() - start.getHours();
-    var m = today.getMinutes() - start.getMinutes();
-    var s = today.getSeconds() - start.getSeconds(); 
-    m = checkTime(m);
-    s = checkTime(s);
+    var now = new Date() 
+    var ms = now - start;
+    var s = ms/1000;
+    var h = parseInt(s/3600);
+    s = s % 3600;
+    var m = parseInt(s/60);
+    s = parseInt(s % 60);
+    s = addZerosTime(s)
+    m = addZerosTime(m)
     timers = document.getElementsByClassName('timer');
     for ( var i = 0; i < timers.length; i++) {{    
         timers.item(i).innerHTML = h + ":" + m + ":" + s;
@@ -30,13 +33,13 @@ function curTime() {{
     var h = today.getHours();
     var m = today.getMinutes();
     var s = today.getSeconds();
-    m = checkTime(m);
-    s = checkTime(s);
+    m = addZerosTime(m);
+    s = addZerosTime(s);
     document.getElementById('clock').innerHTML =
     h + ":" + m + ":" + s;
     var t = setTimeout(curTime, 1000);
 }}
-function checkTime(i) {{
+function addZerosTime(i) {{
     if (i < 10) {{i = "0" + i}};  // add zero in front of numbers < 10
     return i;
 }}

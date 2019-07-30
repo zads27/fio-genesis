@@ -355,8 +355,11 @@ def main():
                 }]
       
         print('')              
-        action = prompt(userAction,style=fioGenerator.style)['action']
-       
+        action = prompt(userAction,style=fioGenerator.style)
+        try: 
+            action = action['action']
+        except KeyError:
+            continue
         if action == 'Create a workload':
             create_workload(targets)
        
@@ -392,7 +395,7 @@ def main():
                 pass
                 
         elif action == 'Run all currently queued workloads':
-            if 1:#try:
+            try:
                 confirm = 1 if not os.path.isdir('results') else input('Previous Results will be overwritten! Continue?')
                 if confirm not in ['n','N','x','X']:
                     shutil.rmtree('results',ignore_errors=True)
@@ -403,9 +406,9 @@ def main():
                             'type': 'checkbox',
                             'message': 'Would you like to plot and display live Benchmark Data?:',
                             'name': 'displayTypes',
-                            'choices': [{'name':'IOPS','checked':False},
-                                        {'name':'MBPS','checked':False},
-                                        {'name':'QoS','checked':False}] 
+                            'choices': [{'name':'IOPS','checked':True},
+                                        {'name':'MBPS','checked':True},
+                                        {'name':'QoS','checked':True}] 
                         },
                         {
                             'type': 'input',
@@ -418,14 +421,14 @@ def main():
                             'type': 'checkbox',
                             'message': 'Select workloads for {} live output:'.format('IOPS'),
                             'name': 'IOPS',
-                            'choices': [{'name':x['filename'],'checked':False} for x in workloadData],
+                            'choices': [{'name':x['filename'],'checked':True} for x in workloadData],
                             'when': lambda answers: 'IOPS' in answers['displayTypes']
                         },
                         {
                             'type': 'checkbox',
                             'message': 'Select workloads for {} live output:'.format('MBPS'),
                             'name': 'MBPS',
-                            'choices': [{'name':x['filename'],'checked':False} for x in workloadData],
+                            'choices': [{'name':x['filename'],'checked':True} for x in workloadData],
                             'when': lambda answers: 'MBPS' in answers['displayTypes']
                         },
                         {
@@ -434,7 +437,7 @@ def main():
                             'name': 'QoS',
                             'choices': [Separator(
                                 'Note that MBPS and IOPS will be running averages when QoS is selected')] +
-                                [{'name':x['filename'],'checked':False} for x in workloadData],
+                                [{'name':x['filename'],'checked':True} for x in workloadData],
                             'when': lambda answers: 'QoS' in answers['displayTypes']
                         }]
                     #ERROR CASE: SELECT ONE different GRAPH PER WORKLOAD; QOS doesn't display
@@ -458,8 +461,8 @@ def main():
                         }]   
                     if prompt(question,style=fioGenerator.style)['plotResults']:
                         plotOutput(liveDisplay)
-            #except: 
-                pass    
+            except: 
+                pass   
         elif action == 'Exit FIOgenesis':
             break
     
