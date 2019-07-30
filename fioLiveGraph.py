@@ -117,7 +117,7 @@ def generateGraphJS(trackingFile,workloadTitle,liveGraphs,liveDisplay):
         
         
         elif graphType == 'QoS':
-            yLog = "type: 'logarithmic',min:0.1,max:10,title:{text:'Completion Latency (mS)'},"
+            yLog = "type: 'logarithmic',min:0.1 ,title:{text:'Completion Latency (mS)'},"
             percentiles = "categories: ['{}']".format(liveDisplay['QoS_percentiles'].replace(':',"','"))
             percentiles += ",\ntitle:{text:'Latency QoS Percentile'}"
             chartType = 'column'
@@ -256,7 +256,7 @@ Highcharts.chart('u{ID}container', {{
                 enabled: true,
                 rotation: -90,
                 crop: false,
-                overflow: 'none'
+                overflow: "none"
             }}
         }}
     }},
