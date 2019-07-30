@@ -90,15 +90,16 @@ def generateGraphJS(trackingFile,workloadTitle,liveGraphs,liveDisplay):
             percentiles = ''
             dataLoc = {'IOPS':1,'MBPS':2}[graphType]
             chartType = 'solidgauge'            
-            dataCallback = "callback(xobj.responseText.split(',')[{dataLoc}]/1000);".format(dataLoc=dataLoc)
+            dataCallback = "callback(xobj.responseText.split(',')[{dataLoc}]);".format(dataLoc=dataLoc)
             dataSeries = """
                 {{
                 name: '{units}',
                 data: [0],
                 dataLabels: {{
                     format: '<div style="text-align:center"><span style="font-size:40px;color:' +
-                        ((Highcharts.theme && Highcharts.theme.contrastTextColor) || 'black') + '">{{y}}</span><br/>' +
-                           '<span style="font-size:24px;color:#999999">{units}</span></div>'}},
+                        ((Highcharts.theme && Highcharts.theme.contrastTextColor) || 'black') + 
+                        '">{{y}}</span><br/>' +
+                        '<span style="font-size:24px;color:#999999">{units}</span></div>'}},
                 tooltip: {{
                     valueSuffix: '{units}'
                     }}
@@ -118,6 +119,7 @@ def generateGraphJS(trackingFile,workloadTitle,liveGraphs,liveDisplay):
         elif graphType == 'QoS':
             yLog = "type: 'logarithmic',"
             percentiles = "categories: ['{}']".format(liveDisplay['QoS_percentiles'].replace(':',"','"))
+            percentiles += ",\ntitle:{text:'Completion Latency (mS)'}"
             chartType = 'column'
             dataCallback = '''
                 resp = xobj.responseText;
@@ -140,10 +142,10 @@ def generateGraphJS(trackingFile,workloadTitle,liveGraphs,liveDisplay):
                 name: 'Write',
                 data: [1],
                 dataLabels: {{
-                    format: '<div style="text-align:center"><span style="font-size:40px;color:' +
+                   format: '<div style="text-align:center"><span style="color:' +
                         ((Highcharts.theme && Highcharts.theme.contrastTextColor) || 'black') + 
-                        '">{{y}}</span><br/>' +
-                        '<span style="font-size:24px;color:#999999">{units}</span></div>'}},
+                        '">{{y:.3}}</span>' +
+                        '<span style="color:#999999">{units}</span></div>'}},
                 tooltip: {{
                     valueSuffix: '{units}'
                     }}
@@ -245,6 +247,15 @@ Highcharts.chart('u{ID}container', {{
                 y: -25,
                 borderWidth: 0,
                 useHTML: true
+            }}
+        }},
+        column: {{
+            dataLabels: {{
+                y: -35,
+                borderWidth: 0,
+                useHTML: true,
+                enabled: true
+                rotation: -90
             }}
         }}
     }},

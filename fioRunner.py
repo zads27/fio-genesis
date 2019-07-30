@@ -165,12 +165,13 @@ def updateStatus(workload):
                     #fio 2.16:
                     readQoS = jsonFrame['jobs'][0]['read']['clat']['percentile']
                     writeQoS = jsonFrame['jobs'][0]['write']['clat']['percentile']
+                readQoS.pop('0.00')
+                writeQoS.pop('0.00')
                 timestamp = datetime.datetime.isoformat(datetime.datetime.now()) 
                 data = ('{timestamp},{iops},{mbps}\n'.format(
                         timestamp=timestamp,
-                        iops = str(int(float('{:.{p}g}'.format(iops,p=3)))),
-                        mbps=mbps))# = str(int(float('{:.{p}g}'.format(mbps,p=3))))
-                        #3 significant figures
+                        iops = str(int(iops)),
+                        mbps=mbps))
                 workload['outputTrackingFileH'].write(data)
                 data = ','.join([data.strip('\n'),str(readQoS),str(writeQoS)]) 
                 open(workload['outputTrackingFileL'],'w').write(data)

@@ -438,6 +438,9 @@ def main():
                             'when': lambda answers: 'QoS' in answers['displayTypes']
                         }]
                     #ERROR CASE: SELECT ONE different GRAPH PER WORKLOAD; QOS doesn't display
+                    #MBPS display on livegraph is 1/1000
+                    #index of data is off by 1 on QoS livegraph
+                    #no datalabels on QoS graph
                     liveOutputSelect = prompt(liveOutputSelect,style=fioGenerator.style)
                     liveDisplay = {'graphTypes':liveOutputSelect.pop('displayTypes')}
                     if 'QoS_percentiles' in liveOutputSelect:
