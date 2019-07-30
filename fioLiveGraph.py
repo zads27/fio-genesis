@@ -83,7 +83,7 @@ def generateGraphJS(trackingFile,workloadTitle,liveGraphs,liveDisplay):
     graphJS = ''
     for graphType in liveGraphs:
         containerID = liveGraphs[graphType]
-        units = {'IOPS':'IOPS','MBPS':'MBPS','QoS':'uSec'}[graphType]
+        units = {'IOPS':'IOPS','MBPS':'MBPS','QoS':'mS'}[graphType]
         
         if graphType in ['IOPS','MBPS']:    
             yLog = 'min:0,'
@@ -144,7 +144,7 @@ def generateGraphJS(trackingFile,workloadTitle,liveGraphs,liveDisplay):
                 dataLabels: {{
                    format: '<div style="text-align:center"><span style="color:' +
                         ((Highcharts.theme && Highcharts.theme.contrastTextColor) || 'black') + 
-                        '">{{y:.3}}</span>' +
+                        '">{{y:.3f}}</span>' +
                         '<span style="color:#999999">{units}</span></div>'}},
                 tooltip: {{
                     valueSuffix: '{units}'
