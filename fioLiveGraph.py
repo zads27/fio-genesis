@@ -11,7 +11,21 @@ def htmlMain(title,workloadsContainerHTML):
 <script type="text/javascript" src="js/highcharts-more.js"></script>
 <script type="text/javascript" src="js/solid-gauge.js"></script>
 <script>
-function startTime() {{
+var start = new Date();
+function timer() {{
+    var today = new Date();
+    var h = today.getHours() - start.getHours();
+    var m = today.getMinutes() - start.getMinutes();
+    var s = today.getSeconds() - start.getSeconds(); 
+    m = checkTime(m);
+    s = checkTime(s);
+    timers = document.getElementsByClassName('timer');
+    for ( var i = 0; i < timers.length; i++) {{    
+        timers.item(i).innerHTML = h + ":" + m + ":" + s;
+        }}
+    var t = setTimeout(timer, 1000);
+}}
+function curTime() {{
     var today = new Date();
     var h = today.getHours();
     var m = today.getMinutes();
@@ -20,7 +34,7 @@ function startTime() {{
     s = checkTime(s);
     document.getElementById('clock').innerHTML =
     h + ":" + m + ":" + s;
-    var t = setTimeout(startTime, 500);
+    var t = setTimeout(curTime, 1000);
 }}
 function checkTime(i) {{
     if (i < 10) {{i = "0" + i}};  // add zero in front of numbers < 10
@@ -28,7 +42,7 @@ function checkTime(i) {{
 }}
 </script>
 </head>
-<body onload="startTime()">
+<body onload="curTime();timer();">
 <br/>
     <h2 style="text-align:center">
     {graphTitle}
@@ -66,7 +80,7 @@ def generateWorkloadContainers(workloadData):
 <tr>
 <td style="text-align:right; font-size:20px; width:33%">{File}</td> 
 <td style="text-align:center; font-size:12px; width:33%">{Title}</td>
-<td style="text-align:left; width:33%"> </td>
+<td style="text-align:left; width:33%">Elapsed time:  <div class='timer'></div></td>
 </tr>
 </thead>
 <tbody>
@@ -86,8 +100,8 @@ def generateGraphJS(trackingFile,workloadTitle,liveGraphs,liveDisplay):
         units = {'IOPS':'IOPS','MBPS':'MBPS','QoS':'mS'}[graphType]
         
         if graphType in ['IOPS','MBPS']:    
-            yLog = 'min:0,tickAmount: 2,'
-            percentiles = ''
+            yAxis = 'min:0,tickAmount: 2,'
+            xAxis = ''
             dataLoc = {'IOPS':1,'MBPS':2}[graphType]
             chartType = 'solidgauge'            
             dataCallback = "callback(xobj.responseText.split(',')[{dataLoc}]);".format(dataLoc=dataLoc)
@@ -117,9 +131,9 @@ def generateGraphJS(trackingFile,workloadTitle,liveGraphs,liveDisplay):
         
         
         elif graphType == 'QoS':
-            yLog = "type: 'logarithmic',min:0.1 ,title:{text:'Completion Latency (mS)'},"
-            percentiles = "categories: ['{}']".format(liveDisplay['QoS_percentiles'].replace(':',"','"))
-            percentiles += ",\ntitle:{text:'Latency QoS Percentile'}"
+            yAxis = "type: 'logarithmic', min:0.1, title:{text:'Completion Latency (mS)'},"
+            xAxis = "categories: ['{}']".format(liveDisplay['QoS_percentiles'].replace(':',"','"))
+            xAxis += ",\ntitle:{text:'Latency QoS Percentile'}"
             chartType = 'column'
             dataCallback = '''
                 resp = xobj.responseText;
@@ -203,7 +217,7 @@ Highcharts.chart('u{ID}container', {{
     }},
     
     xAxis:{{
-        {percentiles} 
+        {xAxis} 
     }},
     
     title: {{
@@ -220,7 +234,7 @@ Highcharts.chart('u{ID}container', {{
 
     // the value axis
     yAxis: {{
-        {yLog}
+        {yAxis}
         title: {{ text: '{units}' }},
         stops: [
             [0.2, '#DF5353'], // red
@@ -281,9 +295,10 @@ function (chart) {{
             dataCallback=dataCallback,
             chartType=chartType,
             updateDataFunc=updateDataFunc,
-            yLog=yLog,
-            dataSeries=dataSeries,
-            percentiles=percentiles)
+            xAxis=xAxis,
+            yAxis=yAxis,
+            dataSeries=dataSeries
+            )
     
     
     return graphJS
