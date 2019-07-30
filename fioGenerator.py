@@ -105,9 +105,9 @@ def create_fio(target):
         {
             'type': 'input',
             'message': u'\u2517\u2501 Enter read percentage',
-            'name': 'jobs',
-            'validate': lambda answer: 'You must enter a value.' \
-                if len(answer) == 0 else True,
+            'name': 'io_mix',
+            'validate': lambda answer: 'You must enter a valid value (include %)' \
+                if ((len(answer) == 0) or '%' not in answer) else True,
             'when': lambda answers: answers['io_mix'] == 'Custom %'
         },         
                         

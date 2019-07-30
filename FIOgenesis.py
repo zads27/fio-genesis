@@ -462,6 +462,7 @@ def main():
                     if prompt(question,style=fioGenerator.style)['plotResults']:
                         plotOutput(liveDisplay)
             except: 
+                raise
                 pass   
         elif action == 'Exit FIOgenesis':
             break

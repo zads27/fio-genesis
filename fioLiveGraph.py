@@ -103,7 +103,22 @@ def generateGraphJS(trackingFile,workloadTitle,liveGraphs,liveDisplay):
         units = {'IOPS':'IOPS','MBPS':'MBPS','QoS':'mS'}[graphType]
         
         if graphType in ['IOPS','MBPS']:    
-            yAxis = 'min:0,tickAmount: 2,'
+            yAxis = """
+                min:0,
+                tickAmount: 2,
+                stops: [
+                    [0.2, '#DF5353'], // red
+                    [0.5, '#DDDF0D'], // yellow
+                    [0.8, '#33CC33'] // green
+                ],
+                minorTickInterval: null,
+                labels: {
+                    y: 30,
+                    style: {
+                        fontSize: "20px"
+                    }
+                },
+                """
             xAxis = ''
             dataLoc = {'IOPS':1,'MBPS':2}[graphType]
             chartType = 'solidgauge'            
@@ -134,9 +149,16 @@ def generateGraphJS(trackingFile,workloadTitle,liveGraphs,liveDisplay):
         
         
         elif graphType == 'QoS':
-            yAxis = "type: 'logarithmic', min:0.1, title:{text:'Completion Latency (mS)'},"
-            xAxis = "categories: ['{}']".format(liveDisplay['QoS_percentiles'].replace(':',"','"))
-            xAxis += ",\ntitle:{text:'Latency QoS Percentile'}"
+            yAxis = """
+                type: 'logarithmic', 
+                min:0.1, 
+                title:{text:'Completion Latency (mS)'},
+                minorTickInterval: 0.1,
+                """
+            xAxis = """
+                categories: ['{}'],
+                title:{{text:'Latency QoS Percentile'}}
+                """.format(liveDisplay['QoS_percentiles'].replace(':',"','"))
             chartType = 'column'
             dataCallback = '''
                 resp = xobj.responseText;
@@ -147,10 +169,10 @@ def generateGraphJS(trackingFile,workloadTitle,liveGraphs,liveDisplay):
                 name: 'Read',
                 data: [1],
                 dataLabels: {{
-                    format: '<div style="text-align:center"><span style="font-size:40px;color:' +
+                    format: '<div style="text-align:center"><span style="color:' +
                         ((Highcharts.theme && Highcharts.theme.contrastTextColor) || 'black') + 
-                        '">{{y}}</span><br/>' +
-                        '<span style="font-size:24px;color:#999999">{units}</span></div>'}},
+                        '">{{y:.3f}}</span>' +
+                        '<span style="color:#999999">{units}</span></div>'}},
                 tooltip: {{
                     valueSuffix: '{units}'
                     }}
@@ -238,23 +260,7 @@ Highcharts.chart('u{ID}container', {{
     // the value axis
     yAxis: {{
         {yAxis}
-        title: {{ text: '{units}' }},
-        stops: [
-            [0.2, '#DF5353'], // red
-            [0.5, '#DDDF0D'], // yellow
-            [0.8, '#33CC33'] // green
-        ],
-        lineWidth: 0,
-        minorTickInterval: null,
-        title: {{
-            y: -70
-        }},
-        labels: {{
-            y: 30,
-            style: {{
-                fontSize: "20px"
-            }}
-        }}
+        lineWidth: 0
     }},
 
     plotOptions: {{
