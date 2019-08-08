@@ -100,7 +100,7 @@ def create_fio(target):
             'type': 'list',
             'message': 'Select target IO R/W mix',
             'name': 'io_mix',
-            'choices': ['100% read','70% read','30% read','0% read','Custom %']
+            'choices': ['100% read','70% read','50% read','30% read','0% read','Custom %']
         },        
         {
             'type': 'input',

@@ -1,47 +1,82 @@
 #!/usr/bin/python3
 """
-Base program for interactive fio workload generator/process monitor for running single/multiple fio workloads in parallel
+Interactive CLI program for realtime fio workload generator/process monitor/display  
+Allows for tty running of FIO on systems without GUI
+
+
+Features:
+    Create, Import, Delete queued .fio file workloads 
+    Run and monitor progress/performance of multiple fio workloads in parallel
+    
+Optional features: 
+    Live output display using webbrowser/JS highcharts
+    Results graphed display of throughput using Python plotly package
+
+
+Python package dependencies:
+    Python 2.7+ and 3.5+ tested
+    pandas (required)
+    PyInquirer (required)
+    plotly (optional?)
+
+
+OS Dependencies:
+    lsscsi (optional?)
+    nvme-cli (optional?)
+
+modules:
+    fioLiveGraph: 
+        dynamically creates live graphs based on user selections
+    fioRunner:
+        creates fio process threads and parses live stdout output from them
+    fioGenerator:
+        creates/imports .fio files from system  
   
 To do:
-Use io.StringIO object for updating each process dynamically on line write instead of after all fio threads have updated values 
-Check targets for partition map and warn for write operations
+Use io.StringIO object for updating each process dynamically on line write instead of OS file
+Check targets for partition map and warn for write operations(?)
+Parse more fio line options? Override the unparseable error in parsing?
+Edit existing workloads 
+Strip .fio off new file name
 
-Fix QoS:
-Add bargraph highcharts for QoS 
 """
 
+def import_install(package):
+    try:
+        __import__(package) 
+        return 0
+    except ImportError:
+        #from pip._internal import main as pip
+        #pip(['install',package])
+        print ('--- Package not found: \'{0)\' --- \n Attempting to import package, please wait...'.format(package))
+        install = subprocess.call(['sudo',sys.executable,'-m','pip','install',package])
+        return install
+
 #Standard Libs
-import subprocess,sys,os,copy,hashlib,shutil,glob,webbrowser,json
+import subprocess,sys,os,copy,hashlib,shutil,glob,webbrowser,json,traceback
 
 #Installed Libs/Utils
+import_install('pandas')
+import_install('plotly')
+import_install('PyInquirer')
 import pandas
 from plotly import tools
 import plotly.offline as py
 import plotly.graph_objs as go
 from PyInquirer import style_from_dict, Token, prompt, Separator
-'lsscsi'
-'nvme-cli'
+
+#python 2 compatibility for input
 if sys.version_info[0] < 3:
     input = raw_input
 
 #Custom Libs
 import fioGenerator,fioRunner
-debug = 0
-
-def import_install(package):
-    try:
-        __import__(package)
-        return 0
-    except ImportError:
-        #from pip._internal import main as pip
-        #pip(['install',package])
-        print ('--- Package not found: \'{0)\' --- \n Importing package, please wait...'.format(package))
-        install = subprocess.call(['sudo',sys.executable,'-m','pip','install',package])
-        return install
 
 
 def clearScreen():
-    """Perform screen/terminal clear"""
+    """
+    Perform screen/terminal clear
+    """
     if 'linux' in sys.platform:
         os.system('clear')
     else:
@@ -49,7 +84,9 @@ def clearScreen():
 
 
 def fileChecksum(file):
-    """Return checksum of file specified by input [file]"""
+    """
+    Return checksum of file contents specified by input [file]
+    """
     md5check = hashlib.md5(open(file,'rb').read()).hexdigest()
     return md5check
             
@@ -66,7 +103,6 @@ def find_drives(display):
     """
     if 'linux' in sys.platform:
         lsblk = subprocess.check_output(['lsblk','-Ppo','KNAME,MODEL,SIZE,TYPE,MOUNTPOINT,REV']).decode('utf-8').splitlines()
-        #lsblk = [x.split() for x in lsblk if x[0] in ['n','s','v']]
         block_dev = [line.split() for line in lsblk]
         for line in block_dev:
             try:
@@ -104,64 +140,74 @@ def createWorkloadDF(workloadData,dfType):
     Parameters:
         workloadData (list): a list of lists containing 1 workload file per element 
             and describing all parameters parsed from workload file
-        showindex (bool): if true, will add the index to the output table;
-            typically on for display/add/delete workloads, off for workload runtime monitoring (to save some screen display space)
-            
+        dfType (int): 
+            1: clip some output for queued drive workloads 
+            2: clip more output to make room for longer/detailed status during fio monitoring/runtime
     Returns:
         DataFrame: a pandas DF with limited columns for display; exceeding terminal width will clip the displayed columns  
     """ 
-
     df = pandas.DataFrame.from_dict(workloadData)
     
-    if dfType == 1: #clip some output for screen display
-        df = df[['file','target','bs','seqRand','readPercent','size','numJobs','iodepth','size','time']]
-    elif dfType == 2: #clip some output for process tracking display
+    if dfType == 1:
+        df = df[['file','target','bs','seqRand','readPercent','size','numjobs','iodepth','size','time']]
+    elif dfType == 2: 
         widths = {'iops':6,'mbps':5,'eta':15,'status':35}
+        
         for label in widths:
+            print(df.iloc[0][label])
             df.at[0,label] = str(df.iloc[0][label]).rjust(widths[label])    
         df = df[['filename','file','target','bs','seqRand','readPercent','iops','mbps','eta','status']].set_index('filename')
 
     return df
    
+   
+def parseFIOline(workloadFileLines,key):
+    return [x.split('=')[1].strip() for x in workloadFileLines if x.startswith(key)][0]
     
 def importExtractWorkloadData():
     """
-    Find fio files from pre-set pattern *.fio and parse the critical command line parameters
-        Additionally, check for duplicate file content(via md5), or incomplete workload files 
+    Find fio files from currentWL/*.fio and parse the critical command line parameters
+        Additionally, check for duplicate file content(via md5), or incompatible workload files 
     
     Parameters: 
         None
         
     Returns: 
         workloadData (list of dicts): list of lists containing one workload file per entry;
-            [   {'filename'='*.fio',
-                'bs'=%bs1,'rw'='rw1',
-                'readPercent'=%rwmixread1,
-                'numJobs'=%numjobs1,
-                'iodepth'=%iodepth1,
-                'size'='%size1', 
-                runtime1},
-                {filename2, bs2, ...}
+            [{'filename':workload_file,
+                'file':shortfile,
+                'target':target,
+                'bs':bs,
+                'rw':rw,
+                'seqRand':seqRand,
+                'readPercent':readPercent,
+                'numjobs':numjobs,
+                'iodepth':iodepth,
+                'size':size,
+                'time':time,
+                'status':'Idle',
+                'eta':'N/A',
+                'iops':'0',
+                'mbps':'0',
+                'percentComplete':0,
+                'liveGraphs':{}}
             ]
     """
     files = os.listdir('.')
-    workloadFiles = []
+    workloadFilenames,workloadData,dupCheck = [],[],{}
     for filename in files:
         if filename.endswith('.fio'):
-            workloadFiles.append(filename)     
-    available_targets = find_drives(False)
+            workloadFilenames.append(filename)     
     print ('Current workloads:')
-    dupCheck = {}
-    workloadData = []
-    for workload_file in workloadFiles:
+    for workload_file in workloadFilenames:
         try:
             file = open(workload_file,'r')
             workloadFileLines = file.readlines()
-            target = [x.split('=')[1].strip() for x in workloadFileLines if x.startswith('filename')][0]
-            bs = [x.split('=')[1].strip() for x in workloadFileLines if x.startswith('bs')][0]
-            rw = [x.split('=')[1].strip() for x in workloadFileLines if x.startswith('rw')][0]
+            target = parseFIOline(workloadFileLines,'filename')
+            bs = parseFIOline(workloadFileLines,'bs')
+            rw = parseFIOline(workloadFileLines,'rw')
             if not rw: 
-                rw = [x.split('=')[1].strip() for x in workloadFileLines if x.startswith('readwrite')][0]
+                rw = parseFIOline(workloadFileLines,'readwrite')
             if rw in ['read','write','rw','readwrite']:
                 seqRand = 'seq'
             elif rw in ['randread','randwrite','randrw']:
@@ -171,13 +217,13 @@ def importExtractWorkloadData():
             elif rw in ['write','randwrite']:
                 readPercent = 0
             else: 
-                readPercent = int([x.split('=')[1].strip() for x in workloadFileLines if x.startswith('rwmixread')][0])
+                readPercent = int(parseFIOline(workloadFileLines,'rwmixread'))
             readPercent = '{0}/{1}'.format(readPercent,100-readPercent)
-            numJobs = int([x.split('=')[1].strip() for x in workloadFileLines if x.startswith('numjobs')][0])
-            iodepth = int([x.split('=')[1].strip() for x in workloadFileLines if x.startswith('iodepth')][0])
-            size = [x.split('=')[1].strip() for x in workloadFileLines if x.startswith('size')][0]
-            if int([x.split('=')[1].strip() for x in workloadFileLines if x.startswith('time_based')][0])   :
-                time = [x.split('=')[1].strip() for x in workloadFileLines if x.startswith('runtime')][0]
+            numjobs = int(parseFIOline(workloadFileLines,'numjobs'))
+            iodepth = int(parseFIOline(workloadFileLines,'iodepth'))
+            size = parseFIOline(workloadFileLines,'size')
+            if int(parseFIOline(workloadFileLines,'time_based')):
+                time = parseFIOline(workloadFileLines,'runtime')
             else: 
                 time = 0         
             fileChk = fileChecksum(workload_file)
@@ -198,7 +244,7 @@ def importExtractWorkloadData():
                                     'rw':rw,
                                     'seqRand':seqRand,
                                     'readPercent':readPercent,
-                                    'numJobs':numJobs,
+                                    'numjobs':numjobs,
                                     'iodepth':iodepth,
                                     'size':size,
                                     'time':time,
@@ -210,8 +256,8 @@ def importExtractWorkloadData():
                                     'liveGraphs':{}
                                 })
 
-        except (IndexError,ValueError):
-            #Remove to be able to run unparseable fio files?
+        except (IndexError,ValueError) as e:
+            print(traceback.format_exc())
             print ('\n*** ERROR: Could not parse complete data from WL file: {0} ***'.format(workload_file))
             print ('This file must be deleted or the program will exit.')
             if input ('Do you want to delete this file?') in ['Y','y']:
@@ -236,7 +282,7 @@ def create_workload(targets):
     try: 
         newWL = fioGenerator.create_fio(targets)
         f = open('WL_temp.fio','w')
-        f.write('[WL]\n' 
+        f.write('[WL]\n'
                 'group_reporting=1\n'
                 'name=fio-rand-RW\n'
                 'filename={target}\n'
@@ -275,6 +321,7 @@ def create_workload(targets):
     
     
 def plotOutput(liveDisplay):    
+
     iopsdata,mbpsdata = [],[]
     
     for filename in glob.glob('results/*.dat'):
@@ -414,7 +461,7 @@ def main():
                             'type': 'input',
                             'message': 'Enter desired QoS percentiles:',
                             'name': 'QoS_percentiles',
-                            'default': '10:50:90:95:99:99.9:99.99:99.999:99.9999:99.99999:99.999999',
+                            'default': u'10:50:90:95:99:99.9:99.99:99.999:99.9999:99.99999:99.999999',
                             'when': lambda answers: 'QoS' in answers['displayTypes']
                         },
                         {

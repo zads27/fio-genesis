@@ -78,11 +78,11 @@ def generateWorkloadContainers(workloadData):
                 
         if graphsHTML: 
             workloadsContainerHTML += """
-<table style="width:100%">
+<table style="width:100%; border: 1px solid black">
 <thead>
 <tr>
-<td style="text-align:right; font-size:20px; width:33%">{File}</td> 
-<td style="text-align:center; font-size:12px; width:33%">{Title}</td>
+<td style="text-align:right; font-size:20px; width:33%">{col1Label}</td> 
+<td style="text-align:center; font-size:12px; width:33%">{col2Label}</td>
 <td style="text-align:left; width:33%">Elapsed time:  <div class='timer'></div></td>
 </tr>
 </thead>
@@ -92,7 +92,7 @@ def generateWorkloadContainers(workloadData):
 </tr>
 </tbody>
 </table>
-""".format(graphsHTML=graphsHTML,Title=workload['wlDescription'],File=workload['filename']) 
+""".format(graphsHTML=graphsHTML,col2Label=workload['wlDescription'],col1Label=(workload['filename']+'<br>'+workload['target'])) 
     return workloadsContainerHTML
 
 

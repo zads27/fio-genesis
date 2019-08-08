@@ -13,7 +13,7 @@ import fioLiveGraph,FIOgenesis
 
 
 
-debug = 0
+debug = 1
 
 def to_number(mstring):
     """Convert strings like 13.9k or 1733MiB/s to numbers"""
@@ -124,10 +124,10 @@ def startFIOprocess(workload, liveDisplayOptions):
             shell=False)
         workload['process'] = fioThread
         workload['wlDescription'] = ' <br>'.join([
-                        'Target= {}'.format(workload['target']),
-                        'Block= {}'.format(workload['bs']),
-                        'Rnd/Seq= {}'.format(workload['rw']),
-                        'Rd/Wr= {}'.format(workload['readPercent'])
+                        'Block Size = {}'.format(workload['bs']),
+                        'Rnd/Seq = {}'.format(workload['rw']),
+                        'Rd/Wr = {}'.format(workload['readPercent']),
+                        'Queue Depth = {}'.format(workload['iodepth']*workload['numjobs'])
                         ])
         workload['targetDescription'] = 'SK hynix drive'
         workload['outputTrackingFileH'] = open('results/{0}.dat'.format(workload['filename'].split('.')[0]),'w')
@@ -237,11 +237,13 @@ def runFIO(workloadData,liveDisplay):
         resetCaret = len(workloadData)+3
         while any(wl['percentComplete'] != 100 for wl in workloadData):
             df = FIOgenesis.createWorkloadDF(workloadData,2)
-            print('\x1b[A'*(resetCaret)+'\r') #move caret back to beginning of table
-            print(df.set_index('file')) #reprint workload monitor table
+            if debug == 0:
+                print('\x1b[A'*(resetCaret)+'\r') #move caret back to beginning of table
+                print(df.set_index('file')) #reprint workload monitor table
         #Update and print completed table
         df = FIOgenesis.createWorkloadDF(workloadData,2)
-        print('\x1b[A'*(resetCaret)+'\r') #move caret back to beginning of table
+        if debug == 0:
+            print('\x1b[A'*(resetCaret)+'\r') #move caret back to beginning of table
         print(df.set_index('file')) #reprint workload monitor table    
         [t.join() for t in updaters]
         for workload in workloadData:
