@@ -233,8 +233,7 @@ def runFIO(workloadData,liveDisplay):
             try: 
                 webbrowser.get('firefox').open(liveHtmlFilename,new=0)
             except:
-                webbrowser.open(liveHtmlFilename,new=0)
-        print('\n'*(len(workloadData)+3))       
+                webbrowser.open(liveHtmlFilename,new=0)            
         resetCaret = len(workloadData)+3
         while any(wl['percentComplete'] != 100 for wl in workloadData):
             df = FIOgenesis.createWorkloadDF(workloadData,2)

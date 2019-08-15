@@ -151,7 +151,7 @@ def createWorkloadDF(workloadData,dfType):
             2: clip more output to make room for longer/detailed status during fio monitoring/runtime
     Returns:
         DataFrame: a pandas DF with limited columns for display; exceeding terminal width will clip the displayed columns  
-    """ 
+     
     df = pandas.DataFrame.from_dict(workloadData)
     
     if dfType == 1:
@@ -163,6 +163,7 @@ def createWorkloadDF(workloadData,dfType):
                 df.at[0,label] = df.iloc[0][label].decode('utf-8').rjust(widths[label])    
             else:
                 df.at[0,label] = df.iloc[0][label].rjust(widths[label])    
+            df.at[0,label] = str(df.iloc[0][label]).rjust(widths[label])    
         df = df[['filename','file','target','bs','seqRand','readPercent','iops','mbps','eta','status']].set_index('filename')
     
     return df
