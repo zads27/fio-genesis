@@ -13,7 +13,7 @@ import fioLiveGraph,FIOgenesis
 
 
 
-debug = 1
+debug = 0
 
 def to_number(mstring):
     """Convert strings like 13.9k or 1733MiB/s to numbers"""
@@ -175,6 +175,7 @@ def updateStatus(workload):
                         mbps=mbps))
                 workload['outputTrackingFileH'].write(data)
                 data = ','.join([data.strip('\n'),str(readQoS),str(writeQoS)]) 
+                data = data.replace('u','')
                 open(workload['outputTrackingFileL'],'w').write(data)
                 jsonBuf = ''           
         else:       
@@ -226,7 +227,7 @@ def runFIO(workloadData,liveDisplay):
             t = Thread(target=updateStatus, args=(workload,))
             t.start()
             updaters.append(t)
-        if liveDisplay:
+        if liveDisplay['graphTypes']:
             liveHtmlFilename = 'fioLiveGraph.html'
             fioLiveGraph.createHTMLpage(liveHtmlFilename,workloadData,liveDisplay)
             try: 

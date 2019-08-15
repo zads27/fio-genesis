@@ -39,6 +39,9 @@ Parse more fio line options? Override the unparseable error in parsing?
 Edit existing workloads 
 Strip .fio off new file name
 
+ERROR CASE: SELECT ONE different GRAPH PER WORKLOAD; QOS doesn't display
+
+
 """
 
 def import_install(package):
@@ -68,6 +71,9 @@ from PyInquirer import style_from_dict, Token, prompt, Separator
 #python 2 compatibility for input
 if sys.version_info[0] < 3:
     input = raw_input
+    py2 = 1
+else:
+    py2 = 0
 
 #Custom Libs
 import fioGenerator,fioRunner
@@ -152,12 +158,13 @@ def createWorkloadDF(workloadData,dfType):
         df = df[['file','target','bs','seqRand','readPercent','size','numjobs','iodepth','size','time']]
     elif dfType == 2: 
         widths = {'iops':6,'mbps':5,'eta':15,'status':35}
-        
         for label in widths:
-            print(df.iloc[0][label])
-            df.at[0,label] = str(df.iloc[0][label]).rjust(widths[label])    
+            if py2:
+                df.at[0,label] = df.iloc[0][label].decode('utf-8').rjust(widths[label])    
+            else:
+                df.at[0,label] = df.iloc[0][label].rjust(widths[label])    
         df = df[['filename','file','target','bs','seqRand','readPercent','iops','mbps','eta','status']].set_index('filename')
-
+    
     return df
    
    
@@ -487,10 +494,6 @@ def main():
                                 [{'name':x['filename'],'checked':True} for x in workloadData],
                             'when': lambda answers: 'QoS' in answers['displayTypes']
                         }]
-                    #ERROR CASE: SELECT ONE different GRAPH PER WORKLOAD; QOS doesn't display
-                    #MBPS display on livegraph is 1/1000
-                    #index of data is off by 1 on QoS livegraph
-                    #no datalabels on QoS graph
                     liveOutputSelect = prompt(liveOutputSelect,style=fioGenerator.style)
                     liveDisplay = {'graphTypes':liveOutputSelect.pop('displayTypes')}
                     if 'QoS_percentiles' in liveOutputSelect:
