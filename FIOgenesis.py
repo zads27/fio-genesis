@@ -160,10 +160,10 @@ def createWorkloadDF(workloadData,dfType):
         widths = {'iops':6,'mbps':5,'eta':15,'status':35}
         for label in widths:
             if py2:
-                df.at[0,label] = df.iloc[0][label].decode('utf-8').rjust(widths[label])    
+                df.at[0,label] = df.iloc[0][label].encode('utf-8').rjust(widths[label])    
             else:
                 df.at[0,label] = df.iloc[0][label].rjust(widths[label])    
-            df.at[0,label] = str(df.iloc[0][label]).rjust(widths[label])    
+            #df.at[0,label] = str(df.iloc[0][label]).rjust(widths[label])    
         df = df[['filename','file','target','bs','seqRand','readPercent','iops','mbps','eta','status']].set_index('filename')
     
     return df
