@@ -51,7 +51,7 @@ def import_install(package):
     except ImportError:
         #from pip._internal import main as pip
         #pip(['install',package])
-        print ('--- Package not found: \'{0)\' --- \n Attempting to import package, please wait...'.format(package))
+        print ('--- Package not found: \'{0}\' --- \n Attempting to import package, please wait...'.format(package))
         install = subprocess.call(['sudo',sys.executable,'-m','pip','install',package])
         return install
 
@@ -379,7 +379,7 @@ def main():
          Store in workloads object
 
     """    
-    os.chdir('currentWL')
+    os.chdir('/home/fio-genesis/currentWL')
     
     while True: 
         clearScreen()
