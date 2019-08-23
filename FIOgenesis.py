@@ -519,6 +519,7 @@ def main():
             break
     
     print('FIO-genesis Complete')        
+    return 0
  
  
 if __name__ == "__main__":
