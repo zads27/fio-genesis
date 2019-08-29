@@ -10,5 +10,5 @@ size=100%
 ioengine=libaio
 iodepth=256
 time_based=1 
-runtime=1d
+runtime=20h
 numjobs=1
