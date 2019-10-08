@@ -379,7 +379,7 @@ def main():
          Store in workloads object
 
     """    
-    os.chdir('/home/fio-genesis/currentWL')
+    os.chdir('{}/currentWL'.format(os.getcwd()))
     
     while True: 
         clearScreen()
