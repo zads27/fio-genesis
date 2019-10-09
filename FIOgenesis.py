@@ -63,6 +63,7 @@ import_install('pandas')
 import_install('plotly')
 import_install('PyInquirer')
 import pandas
+import re
 from plotly import tools
 import plotly.offline as py
 import plotly.graph_objs as go
@@ -109,7 +110,7 @@ def find_drives(display):
     """
     if 'linux' in sys.platform:
         lsblk = subprocess.check_output(['lsblk','-Ppo','KNAME,MODEL,SIZE,TYPE,MOUNTPOINT,REV']).decode('utf-8').splitlines()
-        block_dev = [line.split() for line in lsblk]
+        block_dev = [re.findall('([\S]*[= ]+\"[\/\w\s]*\")',line) for line in lsblk]
         for line in block_dev:
             try:
                 for x in range(len(line)):
