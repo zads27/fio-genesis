@@ -109,8 +109,8 @@ def find_drives(display):
         block_dev (list): a list of handles containing the system drive handle 
     """
     if 'linux' in sys.platform:
-        lsblk = subprocess.check_output(['lsblk','-Ppo','KNAME,MODEL,SIZE,TYPE,MOUNTPOINT,REV']).decode('utf-8').splitlines()
-        block_dev = [re.findall('([\S]*[= ]+\"[\/\w\s]*\")',line) for line in lsblk]
+        lsblk = subprocess.check_output(['lsblk','-Ppo','KNAME,MODEL,SIZE,TYPE,MOUNTPOINT,REV']).splitlines()
+        block_dev = [re.findall('([\S]*[= ]+\"[\[\]\.\/\w\s-]*\")',line) for line in lsblk]
         for line in block_dev:
             try:
                 for x in range(len(line)):

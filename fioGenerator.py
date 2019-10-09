@@ -57,7 +57,10 @@ def importFIO():
         return answers
             
 
-def create_fio(target):
+def create_fio(targets):
+    print(targets)
+    target = [x for x in targets if x]
+    print(target)
     questions = [
         {
             'type': 'list',
@@ -170,7 +173,7 @@ def create_fio(target):
             'validate': lambda answer: 'You must enter a value.' \
                 if len(answer) == 0 else True,
             'when': lambda answers: answers['time'] == 'Other'
-        },
+        }
 
     ]
     answers = prompt(questions, style=style)
