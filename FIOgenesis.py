@@ -64,6 +64,7 @@ import_install('plotly')
 import_install('PyInquirer')
 import pandas
 import re
+import numpy as np
 from plotly import tools
 import plotly.offline as py
 import plotly.graph_objs as go
@@ -85,6 +86,7 @@ def clearScreen():
     Perform screen/terminal clear
     """
     if 'linux' in sys.platform:
+        return
         os.system('clear')
     else:
         os.system('cls')
@@ -109,7 +111,7 @@ def find_drives(display):
         block_dev (list): a list of handles containing the system drive handle 
     """
     if 'linux' in sys.platform:
-        lsblk = subprocess.check_output(['lsblk','-Ppo','KNAME,MODEL,SIZE,TYPE,MOUNTPOINT,REV']).splitlines()
+        lsblk = subprocess.check_output(['lsblk','-Ppo','KNAME,MODEL,SIZE,TYPE,MOUNTPOINT,REV']).decode('utf-8').splitlines()
         block_dev = [re.findall('([\S]*[= ]+\"[\[\]\.\/\w\s-]*\")',line) for line in lsblk]
         for line in block_dev:
             try:
@@ -156,7 +158,7 @@ def createWorkloadDF(workloadData,dfType):
     df = pandas.DataFrame.from_dict(workloadData)
     
     if dfType == 1:
-        df = df[['file','target','bs','seqRand','readPercent','size','numjobs','iodepth','size','time']]
+        df = df[['jobName','target','bs','seqRand','readPercent','size','numjobs','iodepth','size','time']].set_index('jobName')
     elif dfType == 2: 
         widths = {'iops':6,'mbps':5,'eta':15,'status':35}
         for label in widths:
@@ -165,13 +167,49 @@ def createWorkloadDF(workloadData,dfType):
             else:
                 df.at[0,label] = df.iloc[0][label].rjust(widths[label])    
             #df.at[0,label] = str(df.iloc[0][label]).rjust(widths[label])    
-        df = df[['filename','file','target','bs','seqRand','readPercent','iops','mbps','eta','status']].set_index('filename')
-    
+        df = df[['filename','jobName','target','bs','seqRand','readPercent','iops','mbps','eta','status']].set_index('filename')
+    df = df.replace(np.nan,'', regex=True)
     return df
    
    
-def parseFIOline(workloadFileLines,key):
-    return [x.split('=')[1].strip() for x in workloadFileLines if x.startswith(key)][0]
+def parseFIOlines(paramlist):
+    paramtable = {
+        'filename': 'target',
+        'bs':       'bs',
+        'blocksize':'bs',
+        'rw':       'rw',
+        'readwrite':'rw',
+        'rwmixread':'readPercent',
+        'numjobs':  'numjobs',
+        'iodepth':  'iodepth',
+        'size':     'size',
+        'time_based':'time_based',
+        'runtime':  'time',
+        'loops':    'loops'
+    }
+    newDict = {}
+    for item in paramlist:
+        if '=' in item: 
+            try:
+                newDict[paramtable[item.split('=')[0]]]=item.split('=')[1]
+            except KeyError: 
+                pass           
+    try: 
+        if newDict['rw'] in ['read','write','rw','readwrite']:
+            newDict['seqRand'] = 'seq'
+        elif newDict['rw'] in ['randread','randwrite','randrw']:
+            newDict['seqRand'] = 'rand'
+        if newDict['rw'] in ['read','randread']:
+            readPercent = 100
+        elif newDict['rw'] in ['write','randwrite']:
+            readPercent = 0
+        elif newDict['readPercent']: 
+            readPercent = newDict['readPercent']
+        newDict['readPercent'] = '{0}/{1}'.format(readPercent,100-int(readPercent))
+    except: 
+        pass
+    return newDict
+
     
 def importExtractWorkloadData():
     """
@@ -184,7 +222,7 @@ def importExtractWorkloadData():
     Returns: 
         workloadData (list of dicts): list of lists containing one workload file per entry;
             [{'filename':workload_file,
-                'file':shortfile,
+                'jobName':shortfile,
                 'target':target,
                 'bs':bs,
                 'rw':rw,
@@ -210,31 +248,52 @@ def importExtractWorkloadData():
     print ('Current workloads:')
     for workload_file in workloadFilenames:
         try:
+            from copy import deepcopy
             file = open(workload_file,'r')
-            workloadFileLines = file.readlines()
-            target = parseFIOline(workloadFileLines,'filename')
-            bs = parseFIOline(workloadFileLines,'bs')
-            rw = parseFIOline(workloadFileLines,'rw')
-            if not rw: 
-                rw = parseFIOline(workloadFileLines,'readwrite')
-            if rw in ['read','write','rw','readwrite']:
-                seqRand = 'seq'
-            elif rw in ['randread','randwrite','randrw']:
-                seqRand = 'rand'
-            if rw in ['read','randread']:
-                readPercent = 100
-            elif rw in ['write','randwrite']:
-                readPercent = 0
-            else: 
-                readPercent = int(parseFIOline(workloadFileLines,'rwmixread'))
-            readPercent = '{0}/{1}'.format(readPercent,100-readPercent)
-            numjobs = int(parseFIOline(workloadFileLines,'numjobs'))
-            iodepth = int(parseFIOline(workloadFileLines,'iodepth'))
-            size = parseFIOline(workloadFileLines,'size')
-            if int(parseFIOline(workloadFileLines,'time_based')):
-                time = parseFIOline(workloadFileLines,'runtime')
-            else: 
-                time = 0         
+            if len(workload_file) > 20:
+                shortfile = workload_file[:8] + '...' + workload_file[-8:]
+            else:
+                shortfile = workload_file
+            workloadStruct = [{
+                'jobName':shortfile+'[global]', 
+                'filename':workload_file,
+                'eta':'N/A',
+                'status':'Idle',
+                'iops':'0',
+                'mbps':'0',
+                'percentComplete':0,
+                'liveGraphs':{} 
+                }]
+            # workloadStruct[0] is always global, whether or not there are global parameters
+            # other workloads in list inherit from global, 
+            # but lose filename for fiorunner.runfio compatibility (to prevent multiple fio instances running same workload)
+            workloadRaw = file.read()
+            workloadJobs = re.findall('\[.*\]',workloadRaw)
+            workloadJobParams = re.split('\[.*\]\n',workloadRaw)
+            workloadJobParams = [x.split() for x in workloadJobParams if (x and x[0] != '#')]
+            workloadDescriptors = dict(zip(workloadJobs,workloadJobParams))
+            for job in workloadJobs:
+                if job != '[global]':
+                    workloadStruct.append(deepcopy(workloadStruct[0])) #copy globals
+                    workloadStruct[-1].pop('filename') #remove filename
+                    workloadStruct[-1]['jobName'] = u' \u2517\u2501' + job
+                updateDict = parseFIOlines(workloadDescriptors[job]) 
+                workloadStruct[-1].update(updateDict)   
+                
+            
+            '''
+            FIO file possibilities:
+            [global]
+            [j1]
+            
+            [j1]
+            
+            [global]
+            
+            [j1]
+            [j2]
+            
+            '''
             fileChk = fileChecksum(workload_file)
             if fileChk in dupCheck: 
                 print ('*** Warning: These are duplicate workloads!!! ***\n',  
@@ -242,37 +301,20 @@ def importExtractWorkloadData():
                         u'\u2517\u2501\u26A0 {0}'.format(dupCheck[fileChecksum(workload_file)]))
             else : 
                 dupCheck[fileChecksum(workload_file)] = workload_file
-            if len(workload_file) > 20:
-                shortfile = workload_file[:8] + '...' + workload_file[-8:]
-            else:
-                shortfile = workload_file 
-            workloadData.append({'filename':workload_file,
-                                    'file':shortfile,
-                                    'target':target,
-                                    'bs':bs,
-                                    'rw':rw,
-                                    'seqRand':seqRand,
-                                    'readPercent':readPercent,
-                                    'numjobs':numjobs,
-                                    'iodepth':iodepth,
-                                    'size':size,
-                                    'time':time,
-                                    'status':'Idle',
-                                    'eta':'N/A',
-                                    'iops':'0',
-                                    'mbps':'0',
-                                    'percentComplete':0,
-                                    'liveGraphs':{}
-                                })
+ 
+            workloadData += workloadStruct
 
         except (IndexError,ValueError) as e:
             print(traceback.format_exc())
             print ('\n*** ERROR: Could not parse complete data from WL file: {0} ***'.format(workload_file))
+            """
+            #Removed file comptibility requirement, as it may not be necessary for just running FIO and graphing data
             print ('This file must be deleted or the program will exit.')
             if input ('Do you want to delete this file?') in ['Y','y']:
                 os.remove(workload_file)
             else:
                 sys.exit()
+            """
     print('')
     return workloadData
     
@@ -291,9 +333,9 @@ def create_workload(targets):
     try: 
         newWL = fioGenerator.create_fio(targets)
         f = open('WL_temp.fio','w')
-        f.write('[WL]\n'
+        f.write('[global]\n'
                 'group_reporting=1\n'
-                'name=fio-rand-RW\n'
+                'name=fio-genesis\n'
                 'filename={target}\n'
                 'rw={rw}\n'
                 'rwmixread={iomix}\n'
@@ -438,15 +480,18 @@ def main():
                     'type': 'checkbox',
                     'message': 'Select Files for deletion:',
                     'name': 'deletionSelection',
-                    'choices': [{'name':x} for x in df.to_string().split('\n')[1:]]
+                    'choices': [{'name':x} for x in df.to_string(   ).split('\n')[2:] if x[0] != ' '] 
                     }]                
                 delFiles = prompt(deletion,style=fioGenerator.style)['deletionSelection']
+                delFiles = [re.findall('\S.*\[global\]',x)[0] for x in delFiles]
+                delFiles = [x['filename'] for x in workloadData if x['jobName'] in delFiles] 
                 for x in delFiles:
-                    print(workloadData[int(x[0])]['filename'])
+                    print(x)
                 confirm = input("Are you sure you want to delete these files?")
                 if confirm in ['y','Y']:
                     for x in delFiles:
-                        os.remove(workloadData[int(x[0])]['filename'])
+                        if os.remove(x) == 0:
+                            print('File deleted: {}'.format(x))
             except:
                 pass
                 
@@ -456,7 +501,6 @@ def main():
                 if confirm not in ['n','N','x','X']:
                     shutil.rmtree('results',ignore_errors=True)
                     os.mkdir('results')
-                    
                     liveOutputSelect = [
                         {
                             'type': 'checkbox',
@@ -477,14 +521,14 @@ def main():
                             'type': 'checkbox',
                             'message': 'Select workloads for {} live output:'.format('IOPS'),
                             'name': 'IOPS',
-                            'choices': [{'name':x['filename'],'checked':True} for x in workloadData],
+                            'choices': [{'name':x['filename'],'checked':True} for x in workloadData if 'filename' in x.keys()],
                             'when': lambda answers: 'IOPS' in answers['displayTypes']
                         },
                         {
                             'type': 'checkbox',
                             'message': 'Select workloads for {} live output:'.format('MBPS'),
                             'name': 'MBPS',
-                            'choices': [{'name':x['filename'],'checked':True} for x in workloadData],
+                            'choices': [{'name':x['filename'],'checked':True} for x in workloadData if 'filename' in x.keys()],
                             'when': lambda answers: 'MBPS' in answers['displayTypes']
                         },
                         {
@@ -493,7 +537,7 @@ def main():
                             'name': 'QoS',
                             'choices': [Separator(
                                 'Note that MBPS and IOPS will be running averages when QoS is selected')] +
-                                [{'name':x['filename'],'checked':True} for x in workloadData],
+                                [{'name':x['filename'],'checked':True} for x in workloadData if 'filename' in x.keys()],
                             'when': lambda answers: 'QoS' in answers['displayTypes']
                         }]
                     liveOutputSelect = prompt(liveOutputSelect,style=fioGenerator.style)
@@ -501,7 +545,7 @@ def main():
                     if 'QoS_percentiles' in liveOutputSelect:
                         liveDisplay['QoS_percentiles'] = liveOutputSelect.pop('QoS_percentiles')
                     for graphType in liveOutputSelect: #{'mbps':[file1,file2],'iops':[file2,file3],'qos':[]}
-                        for workload in workloadData: 
+                        for workload in [x for x in workloadData if 'filename' in x.keys()  ]: 
                             if workload['filename'] in liveOutputSelect[graphType]:
                                 workload['liveGraphs'][graphType] = ''
                     fioRunner.runFIO(workloadData,liveDisplay)

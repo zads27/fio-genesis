@@ -58,9 +58,7 @@ def importFIO():
             
 
 def create_fio(targets):
-    print(targets)
     target = [x for x in targets if x]
-    print(target)
     questions = [
         {
             'type': 'list',
@@ -138,7 +136,7 @@ def create_fio(targets):
         },
         {
             'type': 'input',
-            'message': 'Select target IO Queue Depth',
+            'message': u'\u2517\u2501 Enter target IO Queue Depth',
             'name': 'QD',
             'validate': lambda answer: 'You must enter one value.' \
                 if len(answer) == 0 else True,
@@ -173,6 +171,14 @@ def create_fio(targets):
             'validate': lambda answer: 'You must enter a value.' \
                 if len(answer) == 0 else True,
             'when': lambda answers: answers['time'] == 'Other'
+        },
+        {
+            'type': 'input',
+            'message': u'\u2517\u2501 Enter target workload loops:',
+            'name': 'time',
+            'validate': lambda answer: 'You must enter a value.' \
+                if len(answer) == 0 else True,
+            'when': lambda answers: answers['time'] == 'None'
         }
 
     ]

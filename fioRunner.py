@@ -124,10 +124,10 @@ def startFIOprocess(workload, liveDisplayOptions):
             shell=False)
         workload['process'] = fioThread
         workload['wlDescription'] = ' <br>'.join([
-                        'Block Size = {}'.format(workload['bs']),
-                        'Rnd/Seq = {}'.format(workload['rw']),
-                        'Rd/Wr = {}'.format(workload['readPercent']),
-                        'Queue Depth = {}'.format(workload['iodepth']*workload['numjobs'])
+                        'Block Size = {}'.format(workload['bs'] if 'bs' in workload.keys() else '?'),
+                        'Rnd/Seq = {}'.format(workload['rw'] if 'rw' in workload.keys() else '?'),
+                        'Rd/Wr = {}'.format(workload['readPercent'] if 'readPercent' in workload.keys() else '?'),
+                        'Queue Depth = {}'.format(workload['iodepth']*workload['numjobs'] if ('iodepth' and 'numjobs' in workload.keys()) else '?')
                         ])
         workload['targetDescription'] = 'SK hynix drive'
         workload['outputTrackingFileH'] = open('results/{0}.dat'.format(workload['filename'].split('.')[0]),'w')
@@ -221,7 +221,7 @@ def runFIO(workloadData,liveDisplay):
     if 1:#try:
         df = FIOgenesis.createWorkloadDF(workloadData,2)
         updaters = []
-        for workload in workloadData:
+        for workload in [x for x in workloadData if 'filename' in x.keys()]:
             print ('Starting Workload:   {}'.format(workload['filename']))
             startFIOprocess(workload,liveDisplay)
             t = Thread(target=updateStatus, args=(workload,))
@@ -233,20 +233,21 @@ def runFIO(workloadData,liveDisplay):
             try: 
                 webbrowser.get('firefox').open(liveHtmlFilename,new=0)
             except:
-                webbrowser.open(liveHtmlFilename,new=0)            
+                webbrowser.open(liveHtmlFilename,new=0)
+        print('\n'*(len(workloadData)+3))       
         resetCaret = len(workloadData)+3
-        while any(wl['percentComplete'] != 100 for wl in workloadData):
+        while any(wl['percentComplete'] != 100 for wl in [x for x in workloadData if 'filename' in x.keys()]):
             df = FIOgenesis.createWorkloadDF(workloadData,2)
             if debug == 0:
                 print('\x1b[A'*(resetCaret)+'\r') #move caret back to beginning of table
-                print(df.set_index('file')) #reprint workload monitor table
+                print(df.set_index('jobName')) #reprint workload monitor table
         #Update and print completed table
         df = FIOgenesis.createWorkloadDF(workloadData,2)
         if debug == 0:
             print('\x1b[A'*(resetCaret)+'\r') #move caret back to beginning of table
-        print(df.set_index('file')) #reprint workload monitor table    
+        print(df.set_index('jobName')) #reprint workload monitor table    
         [t.join() for t in updaters]
-        for workload in workloadData:
+        for workload in [x for x in workloadData if 'filename' in x.keys()]:
             workload['process'] = workload['process'].poll()
             if workload['process'] != 0:
                 print('\nFIO Error:')

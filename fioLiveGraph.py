@@ -63,7 +63,7 @@ function addZerosTime(i) {{
 def generateWorkloadContainers(workloadData): 
     ID = 0
     workloadsContainerHTML = ''
-    for workload in workloadData: 
+    for workload in [x for x in workloadData if 'filename' in x.keys()]: 
         graphsHTML = ''
         for graph in ['IOPS','MBPS','QoS']:
             if graph in workload['liveGraphs']:
@@ -92,7 +92,7 @@ def generateWorkloadContainers(workloadData):
 </tr>
 </tbody>
 </table>
-""".format(graphsHTML=graphsHTML,col2Label=workload['wlDescription'],col1Label=(workload['filename']+'<br>'+workload['target'])) 
+""".format(graphsHTML=graphsHTML,col2Label=workload['wlDescription'],col1Label=(workload['filename']+'<br>'+(workload['target'] if 'target' in workload.keys() else '?') )) 
     return workloadsContainerHTML
 
 
