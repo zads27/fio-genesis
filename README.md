@@ -6,20 +6,20 @@ python based cli for fio benchmark workload generation, monitoring, and performn
     Performance visualizations are HTML/JS based and require compatible web browser
 
 ## Package Contents
-* FIOgenesis.py
+* **FIOgenesis.py**
    * Main program, displays drives attached to system, current queued workload parameters. Has menu options to create/import/delete FIO workloads and run/monitor/visualize parallel FIO instances 
+* **currentWL/**
+  * Stores currently queued FIO workloads
+* currentWL/results
+  * Stores results (log file, data, visualizations) from last workload run by FIOgenesis
+* **results/**
+  * Results history of workloads previously run by FIOgenesis
 * fioGenerator.py
    * Called by FIOgenesis to rapidly create simple FIO workloads (only single jobs supported currently)
 * fioRunner.py 
    * Called by FIOgenesis to run all queued FIO workloads
 * fioLiveGraph.py
    * Called by FIOgenesis to dynamically generate HTML/JS webpages for monitoring realtime performance of running workloads
-* currentWL/
-  * Stores currently queued FIO workloads
-* currentWL/results
-  * Stores results (log file, data, visualizations) from last workload run by FIOgenesis
-* results/
-  * Results history of workloads previously run by FIOgenesis
   
 ## Requirements
 * Python 2.7+ or 3.4+
