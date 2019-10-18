@@ -105,13 +105,13 @@ def startFIOprocess(workload, liveDisplayOptions):
         stdout/stderr are routed to Popen object PIPE   
     """        
     try: 
-        fio_command = ['sudo','fio',workload['filename']]
+        fio_command = ['sudo','fio','currentWL/'+workload['filename']]
         if 'QoS' in workload['liveGraphs']:
             fio_command.append('--status-interval=1')
             fio_command.append('--output-format=json')
             fio_command.append('--percentile_list={}'.format(liveDisplayOptions['QoS_percentiles']))
         else:
-            fio_command.append('--output=results/{}'.format(workload['filename'].split('.')[0]+'.log'))
+            fio_command.append('--output=currentWL/results/{}'.format(workload['filename'].split('.')[0]+'.log'))
             fio_command.append('--eta=always')
             fio_command.append('--eta-newline=250ms')
             fio_command.append('--output-format=normal')
@@ -126,11 +126,11 @@ def startFIOprocess(workload, liveDisplayOptions):
         workload['wlDescription'] = ' <br>'.join([
                         'Block Size = {}'.format(workload['bs'] if 'bs' in workload.keys() else '?'),
                         'Rnd/Seq = {}'.format(workload['rw'] if 'rw' in workload.keys() else '?'),
-                        'Rd/Wr = {}'.format(workload['readPercent'] if 'readPercent' in workload.keys() else '?'),
-                        'Queue Depth = {}'.format(workload['iodepth']*workload['numjobs'] if ('iodepth' and 'numjobs' in workload.keys()) else '?')
+                        'Rd/Wr = {}'.format(workload['readPercent'] if 'readPercent' in workload.keys() else '?')#,
+                        #'Queue Depth = {}'.format(workload['iodepth']*workload['numjobs'] if ('iodepth' and 'numjobs' in workload.keys()) else '?')
                         ])
         workload['targetDescription'] = 'SK hynix drive'
-        workload['outputTrackingFileH'] = open('results/{0}.dat'.format(workload['filename'].split('.')[0]),'w')
+        workload['outputTrackingFileH'] = open('currentWL/results/{0}.dat'.format(workload['filename'].split('.')[0]),'w')
         workload['outputTrackingFileH'].write('timestamp,iops,mbps\n')  
         workload['outputTrackingFileL'] = workload['outputTrackingFileH'].name +'live'      
     except Exception as e:
@@ -228,7 +228,7 @@ def runFIO(workloadData,liveDisplay):
             t.start()
             updaters.append(t)
         if liveDisplay['graphTypes']:
-            liveHtmlFilename = 'fioLiveGraph.html'
+            liveHtmlFilename = 'currentWL/fioLiveGraph.html'
             fioLiveGraph.createHTMLpage(liveHtmlFilename,workloadData,liveDisplay)
             try: 
                 webbrowser.get('firefox').open(liveHtmlFilename,new=0)
@@ -251,7 +251,7 @@ def runFIO(workloadData,liveDisplay):
             workload['process'] = workload['process'].poll()
             if workload['process'] != 0:
                 print('\nFIO Error:')
-                print(open('results/{}'.format(workload['filename'].split('.')[0]+'.log'),'r').read())
+                print(open('currentWL/results/{}'.format(workload['filename'].split('.')[0]+'.log'),'r').read())
 
         print('FIO-run Complete')
         

@@ -331,7 +331,7 @@ def createHTMLpage(outputName, workloadData, liveDisplay, title='SK hynix SSD be
     for workload in workloadData:
         if workload['liveGraphs']: #if livegraphs are recorded for the workload
             HTMLpage += generateGraphJS(
-               workload['outputTrackingFileL'],
+               '../'+workload['outputTrackingFileL'],
                workload['wlDescription'],
                workload['liveGraphs'],
                liveDisplay)

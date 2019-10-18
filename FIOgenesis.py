@@ -62,10 +62,9 @@ import subprocess,sys,os,copy,hashlib,shutil,glob,webbrowser,json,traceback
 import_install('pandas')
 import_install('plotly')
 import_install('PyInquirer')
-import pandas
-import re
+import pandas, re, datetime
 import numpy as np
-from plotly import tools
+from plotly import subplots
 import plotly.offline as py
 import plotly.graph_objs as go
 from PyInquirer import style_from_dict, Token, prompt, Separator
@@ -86,7 +85,6 @@ def clearScreen():
     Perform screen/terminal clear
     """
     if 'linux' in sys.platform:
-        return
         os.system('clear')
     else:
         os.system('cls')
@@ -207,7 +205,7 @@ def parseFIOlines(paramlist):
             readPercent = newDict['readPercent']
         newDict['readPercent'] = '{0}/{1}'.format(readPercent,100-int(readPercent))
     except: 
-        pass
+        pass    
     return newDict
 
     
@@ -240,7 +238,7 @@ def importExtractWorkloadData():
                 'liveGraphs':{}}
             ]
     """
-    files = os.listdir('.')
+    files = os.listdir('currentWL')
     workloadFilenames,workloadData,dupCheck = [],[],{}
     for filename in files:
         if filename.endswith('.fio'):
@@ -249,7 +247,7 @@ def importExtractWorkloadData():
     for workload_file in workloadFilenames:
         try:
             from copy import deepcopy
-            file = open(workload_file,'r')
+            file = open('currentWL/'+workload_file,'r')
             if len(workload_file) > 20:
                 shortfile = workload_file[:8] + '...' + workload_file[-8:]
             else:
@@ -294,13 +292,13 @@ def importExtractWorkloadData():
             [j2]
             
             '''
-            fileChk = fileChecksum(workload_file)
+            fileChk = fileChecksum('currentWL/'+workload_file)
             if fileChk in dupCheck: 
                 print ('*** Warning: These are duplicate workloads!!! ***\n',  
                         u'\u250F\u2501\u26A0 {0}\n'.format(workload_file),  
                         u'\u2517\u2501\u26A0 {0}'.format(dupCheck[fileChecksum(workload_file)]))
             else : 
-                dupCheck[fileChecksum(workload_file)] = workload_file
+                dupCheck[fileChecksum('currentWL/'+workload_file)] = workload_file
  
             workloadData += workloadStruct
 
@@ -332,7 +330,7 @@ def create_workload(targets):
     """
     try: 
         newWL = fioGenerator.create_fio(targets)
-        f = open('WL_temp.fio','w')
+        f = open('currentWL/WL_temp.fio','w')
         f.write('[global]\n'
                 'group_reporting=1\n'
                 'name=fio-genesis\n'
@@ -358,24 +356,24 @@ def create_workload(targets):
         try: 
             newName = input("Enter new fio file name (enter will use file checksum as filename):\n")
             if not newName: 
-                newName = fileChecksum('WL_temp.fio')
-                os.rename('WL_temp.fio','WL_{0}.fio'.format(newName))
+                newName = fileChecksum('currentWL/WL_temp.fio')
+                os.rename('currentWL/WL_temp.fio','currentWL/WL_{0}.fio'.format(newName))
             else:
-                os.rename('WL_temp.fio','{0}.fio'.format(newName))
+                os.rename('currentWL/WL_temp.fio','currentWL/{0}.fio'.format(newName))
         except FileExistsError: 
             print ('*** This is a duplicate workload! Workload file not created. ***')
-            os.remove('WL_temp.fio')
+            os.remove('currentWL/WL_temp.fio')
             input('Enter to continue')
     except:
         print ('Error in file workload completion')
-        os.remove('WL_temp.fio')   
+        os.remove('currentWL/WL_temp.fio')   
     
     
 def plotOutput(liveDisplay):    
 
     iopsdata,mbpsdata = [],[]
     
-    for filename in glob.glob('results/*.dat'):
+    for filename in glob.glob('currentWL/results/*.dat'):
         df = pandas.read_csv(filename)
         filename = filename[8:-4]
         shortname = (filename[:5]+'...'+filename[-5:]) if len(filename) > 10 else filename
@@ -392,7 +390,7 @@ def plotOutput(liveDisplay):
     layout = go.Layout(title='Running Average Performance chart' if 'QoS' in liveDisplay['graphTypes'] else 'Workload Performance chart output',
                        paper_bgcolor='rgb(230, 230, 230)',
                        plot_bgcolor='rgb(200 , 200 , 200)')    
-    fig = tools.make_subplots(rows=2,cols=1,shared_xaxes=True,vertical_spacing=0.02,print_grid=False)
+    fig = subplots.make_subplots(rows=2,cols=1,shared_xaxes=True,vertical_spacing=0.02,print_grid=False)
     fig['layout']['yaxis1'].update(title='IOPS')
     fig['layout']['yaxis2'].update(title='MBps')
     fig['layout'].update(layout)
@@ -401,11 +399,11 @@ def plotOutput(liveDisplay):
     for trace in mbpsdata:
         fig.append_trace(trace,2,1)
     
-    py.plot(fig, filename='results/results.html',auto_open=False)
+    py.plot(fig, filename='currentWL/results/results.html',auto_open=False)
     try: 
-        webbrowser.get('firefox').open('results/results.html',new=0)
+        webbrowser.get('firefox').open('currentWL/results/results.html',new=0)
     except:
-        webbrowser.open('results/results.html', new=0)
+        webbrowser.open('currentWL/results/results.html', new=0)
     
 
 def main():
@@ -422,7 +420,7 @@ def main():
          Store in workloads object
 
     """    
-    os.chdir('{}/currentWL'.format(os.getcwd()))
+    #os.chdir('{}/currentWL'.format(os.getcwd()))
     
     while True: 
         clearScreen()
@@ -490,17 +488,17 @@ def main():
                 confirm = input("Are you sure you want to delete these files?")
                 if confirm in ['y','Y']:
                     for x in delFiles:
-                        if os.remove(x) == 0:
-                            print('File deleted: {}'.format(x))
+                        if os.remove('currentWL/'+x) == 0:
+                            print('File deleted: currentWL/{}'.format(x))
             except:
                 pass
                 
         elif action == 'Run all currently queued workloads':
             try:
-                confirm = 1 if not os.path.isdir('results') else input('Previous Results will be overwritten! Continue?')
+                confirm = 1 if not os.path.isdir('currentWL/results') else input('Previous Results will be overwritten! Continue?')
                 if confirm not in ['n','N','x','X']:
-                    shutil.rmtree('results',ignore_errors=True)
-                    os.mkdir('results')
+                    shutil.rmtree('currentWL/results',ignore_errors=True)
+                    os.mkdir('currentWL/results')
                     liveOutputSelect = [
                         {
                             'type': 'checkbox',
@@ -545,10 +543,11 @@ def main():
                     if 'QoS_percentiles' in liveOutputSelect:
                         liveDisplay['QoS_percentiles'] = liveOutputSelect.pop('QoS_percentiles')
                     for graphType in liveOutputSelect: #{'mbps':[file1,file2],'iops':[file2,file3],'qos':[]}
-                        for workload in [x for x in workloadData if 'filename' in x.keys()  ]: 
+                        for workload in [x for x in workloadData if 'filename' in x.keys()]: 
                             if workload['filename'] in liveOutputSelect[graphType]:
                                 workload['liveGraphs'][graphType] = ''
                     fioRunner.runFIO(workloadData,liveDisplay)
+                    ''' #make output plot automatic/default
                     question = [{
                         'type': 'confirm',
                         'message': 'Would you like to plot and display performance charts?:',
@@ -556,10 +555,20 @@ def main():
                         'default': True
                         }]   
                     if prompt(question,style=fioGenerator.style)['plotResults']:
-                        plotOutput(liveDisplay)
+                    '''
+                    plotOutput(liveDisplay)
             except: 
                 raise
                 pass   
+            finally:
+                resultFiles = os.listdir('currentWL/results')
+                creationTime = datetime.datetime.now().replace(microsecond=0).isoformat().replace(':','-').replace('T','_T')+'_'
+                for file in [x for x in resultFiles if x!= 'results.html']: 
+                    if not os.path.exists('results/'+creationTime+file.split('.')[0]):
+                        os.mkdir('results/'+creationTime+file.split('.')[0])
+                        shutil.copy('currentWL/results/results.html','results/{0}{1}/results.html'.format(creationTime,file.split('.')[0]))
+                    shutil.copy('currentWL/results/{0}'.format(file),'results/{0}{1}/{2}'.format(creationTime,file.split('.')[0],file))
+                            
         elif action == 'Exit FIOgenesis':
             break
     
