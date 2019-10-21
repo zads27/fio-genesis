@@ -49,4 +49,5 @@ python based cli for fio benchmark workload generation, monitoring, and performn
 * Add integrated secure erase functionality for unmounted drives(..?) to allow complex performance characterizations without user interaction
 * Add steady state fio parameters to create workload(?)
 * Add fast/simple preconditioning callouts in create workload function
+* Code cleanup, dependency reduction, etc,. 
 
